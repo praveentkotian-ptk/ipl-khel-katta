@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPL Khel@Katta</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<style>
+:root{--g:#1a5c3a;--g2:#2d8a5e;--o:#ff6b35;--bg:#f0f2f5;--card:#fff;--text:#222;--muted:#666;--border:#ddd;--shadow:0 4px 16px rgba(0,0,0,.08)}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{background:var(--bg);color:var(--text);line-height:1.5}
+header{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;padding:1rem;text-align:center;box-shadow:var(--shadow)}
+header h1{font-size:1.5rem}header p{font-size:.8rem;opacity:.9}
+.container{max-width:800px;margin:0 auto;padding:1rem}
+.card{background:var(--card);border-radius:12px;padding:1.2rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.card h2{font-size:1.1rem;color:var(--g);margin-bottom:.8rem;display:flex;align-items:center;gap:.4rem}
+.card h2::before{content:'';display:inline-block;width:4px;height:1.1rem;background:var(--o);border-radius:2px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:.25rem;margin-top:.7rem}
+input,select{width:100%;padding:.6rem .8rem;border:1px solid var(--border);border-radius:8px;font-size:.9rem;transition:border .2s}
+input:focus,select:focus{outline:none;border-color:var(--g2)}
+.btn{display:inline-block;padding:.6rem 1.2rem;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .2s;margin-right:.4rem;margin-top:.4rem}
+.btn-primary{background:var(--g);color:#fff}.btn-primary:hover{background:var(--g2)}
+.btn-secondary{background:#e9ecef;color:var(--text)}.btn-secondary:hover{background:#dee2e6}
+.btn-outline{background:transparent;border:2px solid var(--g);color:var(--g)}.btn-outline:hover{background:var(--g);color:#fff}
+.btn-sm{padding:.4rem .8rem;font-size:.8rem}
+.table-wrap{overflow-x:auto;margin-top:.6rem}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--border)}
+th{background:#f8f9fa;font-weight:600;color:var(--g);font-size:.8rem;white-space:nowrap}
+tr:hover{background:#f8f9fa}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:20px;font-size:.7rem;font-weight:600}
+.badge-normal{background:#e3f2fd;color:#1565c0}.badge-friday{background:#fff3e0;color:#e65100}
+.badge-twister{background:#fce4ec;color:#c2185b}.badge-processed{background:#e8f5e9;color:#2e7d32}
+.badge-open{background:#fff3e0;color:#e65100}.badge-bonus{background:#f3e5f5;color:#7b1fa2}
+.feedback{position:fixed;top:1rem;right:1rem;padding:.8rem 1.2rem;border-radius:8px;color:#fff;font-size:.9rem;font-weight:600;z-index:1000;animation:slideIn .3s ease,fadeOut .3s ease 2.7s forwards;box-shadow:var(--shadow)}
+@keyframes slideIn{from{transform:translateX(120%)}to{transform:translateX(0)}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+.feedback.success{background:var(--g2)}.feedback.error{background:var(--o)}.feedback.info{background:#1565c0}
+.hidden{display:none}
+.login-screen{position:fixed;inset:0;background:linear-gradient(135deg,var(--g),var(--g2));display:flex;align-items:center;justify-content:center;z-index:2000}
+.login-card{background:#fff;padding:2rem;border-radius:16px;box-shadow:var(--shadow);width:90%;max-width:360px;text-align:center}
+.login-card h2{color:var(--g);margin-bottom:.3rem}.login-card p{color:var(--muted);font-size:.85rem;margin-bottom:1.2rem}
+.login-card input{margin-bottom:.6rem}
+.match-card{border:2px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem;transition:border-color .2s}
+.match-card.active{border-color:var(--g2)}.match-card.closed{border-color:var(--o);opacity:.7}
+.match-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem}
+.match-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:.5rem;align-items:center;text-align:center;margin-bottom:.6rem}
+.match-teams .team{font-weight:700;font-size:1.2rem}.match-teams .vs{color:var(--o);font-weight:700}
+.match-meta{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem}
+.bid-section{background:#f8f9fa;padding:.8rem;border-radius:8px}.bid-section label{margin-top:0}
+.team-select{display:flex;gap:.6rem;margin:.6rem 0}
+.team-option{flex:1;padding:.6rem;border:2px solid var(--border);border-radius:8px;background:#fff;text-align:center;cursor:pointer;font-weight:600;transition:all .2s}
+.team-option:hover{border-color:var(--g2)}.team-option.selected{border-color:var(--g);background:var(--g);color:#fff}
+.bid-points{display:flex;gap:.4rem;flex-wrap:wrap;margin:.6rem 0}
+.bid-point-btn{padding:.5rem 1rem;border:2px solid var(--border);border-radius:8px;background:#fff;cursor:pointer;font-weight:700;font-size:1rem;transition:all .2s;min-width:60px;text-align:center}
+.bid-point-btn:hover{border-color:var(--g2)}.bid-point-btn.selected{border-color:var(--g);background:var(--g);color:#fff}
+.bid-point-btn:disabled{opacity:.4;cursor:not-allowed}
+.point-chip{display:inline-block;padding:.2rem .5rem;border-radius:6px;font-size:.8rem;font-weight:600}
+.point-chip.positive{background:#e8f5e9;color:#2e7d32}.point-chip.negative{background:#ffebee;color:#c62828}
+.point-chip.neutral{background:#f5f5f5;color:var(--muted)}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;font-weight:700;font-size:.8rem}
+.rank-1{background:gold;color:#333}.rank-2{background:silver;color:#333}.rank-3{background:#cd7f32;color:#fff}
+.rank-other{background:#e9ecef;color:var(--muted)}
+.stats-bar{display:flex;gap:1rem;padding:.6rem 0;border-bottom:1px solid var(--border);margin-bottom:.6rem}
+.stats-bar .stat{text-align:center;flex:1}.stats-bar .stat .num{font-size:1.4rem;font-weight:700;color:var(--g)}
+.stats-bar .stat .lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase}
+.history-item{display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border)}
+.history-item:last-child{border-bottom:none}.history-item .match{font-weight:600;font-size:.9rem}
+.history-item .detail{font-size:.8rem;color:var(--muted)}
+.empty-state{text-align:center;padding:2rem;color:var(--muted)}
+.rules-box{background:#fff8e1;border-left:4px solid var(--o);padding:.8rem;border-radius:0 8px 8px 0;margin-bottom:1rem;font-size:.85rem}
+.rules-box h3{color:var(--o);font-size:.9rem;margin-bottom:.3rem}
+.rules-box ul{margin-left:1.2rem;font-size:.8rem;color:var(--muted)}.rules-box li{margin-bottom:.15rem}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:.6rem 1rem;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100}
+.top-bar .user{font-weight:600;color:var(--g)}.top-bar .points{font-weight:700;color:var(--o)}
+.bonus-card{background:linear-gradient(135deg,#f3e5f5,#e1bee7);border:2px solid #ce93d8;border-radius:12px;padding:1rem;margin-bottom:1rem}
+.bonus-card h3{color:#6a1b9a;font-size:1rem;margin-bottom:.4rem}
+.bonus-card .subtitle{font-size:.8rem;color:#8e24aa;margin-bottom:.6rem}
+.ipl-winner-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:.4rem;margin:.6rem 0}
+.ipl-team-btn{padding:.5rem .4rem;border:2px solid #ce93d8;border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:.8rem;text-align:center;transition:all .2s}
+.ipl-team-btn:hover{border-color:#8e24aa}.ipl-team-btn.selected{border-color:#6a1b9a;background:#6a1b9a;color:#fff}
+.sync-status{display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .5rem;border-radius:20px;font-size:.7rem;font-weight:600}
+.sync-on{background:#e8f5e9;color:#2e7d32}.sync-off{background:#ffebee;color:#c62828}
+.section-title{font-size:1rem;color:var(--g);font-weight:700;margin:1rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid var(--border)}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <h2>IPL Khel@Katta</h2>
+    <p>Login with your registered name &amp; email</p>
+    <input id="loginName" placeholder="Your Name">
+    <input id="loginEmail" type="email" placeholder="your@email.com">
+    <button class="btn btn-primary" onclick="doLogin()" style="width:100%;margin-top:.4rem">Login</button>
+    <p style="margin-top:1rem;font-size:.75rem;color:var(--muted)">Not registered? Contact admin to be added.</p>
+  </div>
+</div>
+
+<div class="hidden" id="app">
+  <div class="top-bar">
+    <div class="user" id="welcomeUser">Player</div>
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <span id="syncBadge" class="sync-status sync-off">Offline</span>
+      <span class="points" id="userPoints">0 pts</span>
+      <button class="btn btn-sm btn-secondary" onclick="doLogout()">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+
+    <div class="rules-box">
+      <h3>Contest Rules</h3>
+      <ul>
+        <li>Pick winning team + bid points before toss</li>
+        <li>Win: +100% of bid | Loss: -130% of bid | No bid: -25</li>
+        <li>Normal: 10,20,30,50 | Friday: 20,40,60,100 | Twister: 30,50</li>
+        <li>IPL Winner: Correct +100, Wrong 0 | Toss Ka Boss: Correct +30, Wrong -39</li>
+      </ul>
+    </div>
+
+    <div class="bonus-card" id="iplWinnerCard">
+      <h3>IPL Winner Prediction</h3>
+      <div class="subtitle">Predict the IPL champion before the season ends. Correct = +100 pts!</div>
+      <div id="iplWinnerContent"></div>
+    </div>
+
+    <div class="card">
+      <h2>Current Matches</h2>
+      <div id="matchList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Leaderboard</h2>
+      <div class="stats-bar">
+        <div class="stat"><div class="num" id="statTotalPlayers">0</div><div class="lbl">Players</div></div>
+        <div class="stat"><div class="num" id="statMatchesPlayed">0</div><div class="lbl">Matches</div></div>
+        <div class="stat"><div class="num" id="statMyRank">-</div><div class="lbl">My Rank</div></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rank</th><th>Player</th><th>Points</th><th>Wins</th><th>Bonus</th></tr></thead>
+          <tbody id="leaderboardTable"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-secondary" onclick="refreshAll()" style="margin-top:.6rem">Refresh</button>
+    </div>
+
+    <div class="card">
+      <h2>My History</h2>
+      <div class="section-title">Match Bids</div>
+      <div id="historyList"></div>
+      <div class="section-title" style="margin-top:1rem">Toss Ka Boss</div>
+      <div id="tossHistoryList"></div>
+      <div class="section-title" style="margin-top:1rem">IPL Winner</div>
+      <div id="iplHistoryItem"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let currentUser=null,db=null,fbUnsubs=[];
+const IPL_TEAMS=['CSK','MI','RCB','KKR','SRH','DC','PBKS','RR','GT','LSG'];
+
+function showFeedback(msg,type){
+  const el=document.createElement('div');
+  el.className='feedback '+type;
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),3000);
+}
+
+function getData(k){
+  try{return JSON.parse(localStorage.getItem('ipl_'+k)||'[]')}catch(e){return[]}
+}
+function setData(k,v){
+  localStorage.setItem('ipl_'+k,JSON.stringify(v));
+  syncToCloud(k,v);
+}
+function getBonusData(){
+  try{return JSON.parse(localStorage.getItem('ipl_bonuses')||'{}')}catch(e){return{}}
+}
+
+function doLogin(){
+  const name=document.getElementById('loginName').value.trim();
+  const email=document.getElementById('loginEmail').value.trim().toLowerCase();
+  if(!name||!email){showFeedback('Name and Email required','error');return}
+  const users=getData('users');
+  const user=users.find(u=>u.email===email&&u.name.toLowerCase()===name.toLowerCase());
+  if(!user){showFeedback('Not registered. Contact admin.','error');return}
+  currentUser=user;
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('welcomeUser').textContent=user.name;
+  document.getElementById('userPoints').textContent=user.totalPoints+' pts';
+  loadFirebaseFromStorage();
+  loadIplWinnerCard();
+  loadMatches();
+  refreshAll();
+}
+
+function doLogout(){
+  currentUser=null;
+  fbUnsubs.forEach(u=>u());
+  fbUnsubs=[];
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('loginName').value='';
+  document.getElementById('loginEmail').value='';
+}
+
+function loadIplWinnerCard(){
+  const bonuses=getBonusData();
+  const predictions=getData('iplWinnerPredictions');
+  const myPred=predictions.find(p=>p.email===currentUser.email);
+  const container=document.getElementById('iplWinnerContent');
+  if(bonuses.iplWinnerCalculated){
+    const correct=myPred&&myPred.team===bonuses.iplChampion;
+    container.innerHTML='<div style="text-align:center;padding:.6rem"><div style="font-size:1.2rem;font-weight:700;color:'+(correct?'var(--g)':'var(--o)')+'">'+(correct?'Correct! +100 pts':'Wrong! 0 pts')+'</div><div style="font-size:.85rem;color:var(--muted)">You picked: '+(myPred?myPred.team:'No prediction')+' | Champion: '+bonuses.iplChampion+'</div></div>';
+  }else if(myPred){
+    container.innerHTML='<div style="text-align:center;padding:.6rem"><div style="font-weight:600;color:#6a1b9a">Your pick: '+myPred.team+'</div><div style="font-size:.8rem;color:var(--muted)">Locked in. Wait for results!</div></div>';
+  }else{
+    container.innerHTML='<div style="font-size:.85rem;color:var(--muted);margin-bottom:.4rem">Select your champion:</div><div class="ipl-winner-grid">'+IPL_TEAMS.map(t=>'<div class="ipl-team-btn" onclick="selectIplTeam(this,\\''+t+'\\')">'+t+'</div>').join('')+'</div><button class="btn btn-primary" onclick="submitIplWinner()" style="width:100%">Lock In My Prediction</button>';
+  }
+}
+let selectedIplTeam=null;
+function selectIplTeam(el,team){
+  document.querySelectorAll('.ipl-team-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedIplTeam=team;
+}
+function submitIplWinner(){
+  if(!selectedIplTeam){showFeedback('Select a team first','error');return}
+  const bonuses=getBonusData();
+  if(bonuses.iplWinnerCalculated){showFeedback('Predictions closed','error');return}
+  const predictions=getData('iplWinnerPredictions');
+  if(predictions.find(p=>p.email===currentUser.email)){showFeedback('You already predicted','error');return}
+  predictions.push({email:currentUser.email,team:selectedIplTeam,timestamp:Date.now()});
+  setData('iplWinnerPredictions',predictions);
+  showFeedback('Locked in: '+selectedIplTeam+'!','success');
+  loadIplWinnerCard();
+}
+
+function loadMatches(){
+  const matches=getData('matches');
+  const bids=getData('bids');
+  const tossBids=getData('tossBids');
+  const list=document.getElementById('matchList');
+  if(!matches.length){list.innerHTML='<div class="empty-state">No matches scheduled yet.</div>';return}
+  const openMatches=matches.filter(m=>!m.processed).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const processedMatches=matches.filter(m=>m.processed).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  let html='';
+  openMatches.forEach(m=>{
+    const myBid=bids.find(b=>b.matchId===m.id&&b.email===currentUser.email);
+    const dayLabel=m.special==='friday'?'Friday (Double Dhamaal)':m.special==='twister'?'Sat/Sun (Twister)':'Normal';
+    const points=m.special==='friday'?[20,40,60,100]:m.special==='twister'?[30,50]:[10,20,30,50];
+    const isClosed=myBid&&myBid.team;
+    const cardClass=isClosed?'match-card closed':'match-card active';
+    html+='<div class="'+cardClass+'"><div class="match-header"><div style="display:flex;gap:.4rem">';
+    html+='<span class="badge badge-'+m.special+'">'+dayLabel+'</span>';
+    if(m.deadline) html+='<span class="badge" style="background:#ffebee;color:#c62828">Deadline: '+new Date(m.deadline).toLocaleString()+'</span>';
+    if(m.isTossMatch) html+='<span class="badge badge-bonus">Toss Ka Boss</span>';
+    html+='</div><span class="badge badge-open">Open</span></div>';
+    html+='<div class="match-teams"><div class="team">'+m.teamA+'</div><div class="vs">VS</div><div class="team">'+m.teamB+'</div></div>';
+    if(myBid&&myBid.team){
+      html+='<div style="background:#e8f5e9;padding:.6rem;border-radius:8px;text-align:center"><strong>Your bid:</strong> '+myBid.team+' - '+myBid.points+' pts</div>';
+    }else{
+      html+='<div class="bid-section"><label>Select Team</label><div class="team-select">';
+      html+='<div class="team-option" onclick="selectTeam(this,\\''+m.id+'\\',\\''+m.teamA+'\\')">'+m.teamA+'</div>';
+      html+='<div class="team-option" onclick="selectTeam(this,\\''+m.id+'\\',\\''+m.teamB+'\\')">'+m.teamB+'</div></div>';
+      html+='<label>Select Bid Points</label><div class="bid-points">';
+      points.forEach(p=>{html+='<div class="bid-point-btn" onclick="selectPoints(this,'+p+')">'+p+'</div>'});
+      html+='</div><button class="btn btn-primary" onclick="submitBid(\\''+m.id+'\\')" style="width:100%;margin-top:.4rem">Submit Bid</button></div>';
+    }
+    if(m.isTossMatch&&!m.tossProcessed){
+      const myToss=tossBids.find(b=>b.matchId===m.id&&b.email===currentUser.email);
+      if(myToss){
+        html+='<div style="background:#f3e5f5;padding:.5rem;border-radius:8px;text-align:center;margin-top:.4rem"><strong>Toss pick:</strong> '+myToss.team+' won toss</div>';
+      }else{
+        html+='<div style="background:#f3e5f5;padding:.6rem;border-radius:8px;margin-top:.4rem"><label style="margin-top:0;font-weight:600;color:#6a1b9a">Toss Ka Boss - Who wins the toss?</label>';
+        html+='<div class="team-select" style="margin:.4rem 0"><div class="team-option" onclick="selectTossTeam(this,\\''+m.id+'\\',\\''+m.teamA+'\\')" style="font-size:.85rem">'+m.teamA+'</div>';
+        html+='<div class="team-option" onclick="selectTossTeam(this,\\''+m.id+'\\',\\''+m.teamB+'\\')" style="font-size:.85rem">'+m.teamB+'</div></div>';
+        html+='<button class="btn btn-outline" onclick="submitTossBid(\\''+m.id+'\\')" style="width:100%;margin-top:.2rem">Submit Toss Prediction</button></div>';
+      }
+    }
+    html+='</div>';
+  });
+  if(processedMatches.length){
+    html+='<div style="margin-top:1rem"><h3 style="font-size:.9rem;color:var(--muted);margin-bottom:.6rem">Completed Matches</h3>';
+    processedMatches.forEach(m=>{
+      const myBid=bids.find(b=>b.matchId===m.id&&b.email===currentUser.email);
+      const dayLabel=m.special==='friday'?'Friday':m.special==='twister'?'Twister':'Normal';
+      let resultHtml='';
+      if(myBid){const pc=myBid.pointsChange||0;resultHtml='<span class="point-chip '+(pc>0?'positive':pc<0?'negative':'neutral')+'">'+(pc>0?'+':'')+pc+'</span>';}
+      else{resultHtml='<span class="point-chip negative">-25</span>';}
+      let tossHtml='';
+      if(m.isTossMatch){
+        const myToss=tossBids.find(b=>b.matchId===m.id&&b.email===currentUser.email);
+        if(myToss){const tpc=myToss.pointsChange||0;tossHtml='<div style="margin-top:.3rem;font-size:.8rem"><span class="badge badge-bonus">Toss</span> '+myToss.team+' '+(tpc>0?'+':'')+tpc+'</div>';}
+        else{tossHtml='<div style="margin-top:.3rem;font-size:.8rem"><span class="badge badge-bonus">Toss</span> No prediction (-39)</div>';}
+      }
+      html+='<div class="match-card" style="opacity:.8"><div class="match-header"><span class="badge" style="background:#e8f5e9;color:#2e7d32">'+m.winner+' Won</span><span class="badge badge-processed">Done</span></div>';
+      html+='<div class="match-teams"><div class="team">'+m.teamA+'</div><div class="vs">VS</div><div class="team">'+m.teamB+'</div></div>';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:.4rem"><span style="font-size:.8rem;color:var(--muted)">'+dayLabel+' | '+m.date+'</span>'+resultHtml+'</div>'+tossHtml+'</div>';
+    });
+    html+='</div>';
+  }
+  list.innerHTML=html||'<div class="empty-state">No matches available.</div>';
+}
+
+let selectedTeams={},selectedPoints={},selectedTossTeams={};
+
+function selectTeam(el,matchId,team){
+  const card=el.closest('.match-card');
+  card.querySelectorAll('.team-option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedTeams[matchId]=team;
+}
+function selectPoints(el,pts){
+  const card=el.closest('.match-card');
+  card.querySelectorAll('.bid-point-btn').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  const matchId=card.querySelector('.team-option').getAttribute('onclick').match(/'([^']+)'/)[1];
+  selectedPoints[matchId]=pts;
+}
+function selectTossTeam(el,matchId,team){
+  const card=el.closest('.match-card');
+  card.querySelectorAll('.team-select').forEach(ts=>{ts.querySelectorAll('.team-option').forEach(o=>o.classList.remove('selected'))});
+  el.classList.add('selected');
+  selectedTossTeams[matchId]=team;
+}
+
+function submitBid(matchId){
+  const team=selectedTeams[matchId];
+  const points=selectedPoints[matchId];
+  if(!team){showFeedback('Select a team first','error');return}
+  if(!points){showFeedback('Select bid points','error');return}
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===matchId);
+  if(!m||m.processed){showFeedback('Match is closed','error');return}
+  const bids=getData('bids');
+  const existing=bids.find(b=>b.matchId===matchId&&b.email===currentUser.email);
+  if(existing){showFeedback('You already bid on this match','error');return}
+  bids.push({matchId,email:currentUser.email,team,points,timestamp:Date.now(),processed:false,result:null,pointsChange:0});
+  setData('bids',bids);
+  showFeedback('Bid placed: '+team+' - '+points+' pts','success');
+  loadMatches();
+}
+
+function submitTossBid(matchId){
+  const team=selectedTossTeams[matchId];
+  if(!team){showFeedback('Select toss winner first','error');return}
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===matchId);
+  if(!m||m.tossProcessed){showFeedback('Toss predictions closed','error');return}
+  const tossBids=getData('tossBids');
+  const existing=tossBids.find(b=>b.matchId===matchId&&b.email===currentUser.email);
+  if(existing){showFeedback('You already predicted toss','error');return}
+  tossBids.push({matchId,email:currentUser.email,team,timestamp:Date.now(),result:null,pointsChange:0});
+  setData('tossBids',tossBids);
+  showFeedback('Toss prediction: '+team+' won toss','success');
+  loadMatches();
+}
+
+function refreshAll(){
+  const users=getData('users');
+  const matches=getData('matches');
+  const bonuses=getBonusData();
+  const predictions=getData('iplWinnerPredictions');
+  const tossBids=getData('tossBids');
+  const sorted=[...users].sort((a,b)=>b.totalPoints-a.totalPoints||b.wins-a.wins);
+  document.getElementById('statTotalPlayers').textContent=users.length;
+  document.getElementById('statMatchesPlayed').textContent=matches.filter(m=>m.processed).length;
+  const myRank=sorted.findIndex(u=>u.email===currentUser.email);
+  document.getElementById('statMyRank').textContent=myRank>=0?'#'+(myRank+1):'-';
+  document.getElementById('leaderboardTable').innerHTML=sorted.map((u,i)=>{
+    const rankClass=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-other';
+    const isMe=u.email===currentUser.email;
+    const pred=predictions.find(p=>p.email===u.email);
+    const iplBonus=(bonuses.iplWinnerCalculated&&pred&&pred.team===bonuses.iplChampion)?100:0;
+    const myToss=tossBids.filter(b=>b.email===u.email);
+    const tossBonus=myToss.reduce((sum,b)=>sum+(b.pointsChange||0),0);
+    const totalBonus=iplBonus+tossBonus;
+    return '<tr style="'+(isMe?'background:#e8f5e9;font-weight:600':'')+'"><td><span class="rank-badge '+rankClass+'">'+(i+1)+'</span></td><td>'+u.name+(isMe?' <span style="font-size:.7rem;color:var(--g)">(You)</span>':'')+'</td><td style="font-weight:700;color:'+(u.totalPoints>=0?'var(--g)':'var(--o)')+'">'+u.totalPoints+'</td><td>'+u.wins+'</td><td>'+(totalBonus>0?'+':'')+totalBonus+'</td></tr>';
+  }).join('');
+  if(currentUser){
+    const me=users.find(u=>u.email===currentUser.email);
+    if(me){currentUser=me;document.getElementById('userPoints').textContent=me.totalPoints+' pts';}
+  }
+  loadHistory();
+  loadIplWinnerCard();
+}
+
+function loadHistory(){
+  const bids=getData('bids');
+  const matches=getData('matches');
+  const myBids=bids.filter(b=>b.email===currentUser.email).sort((a,b)=>b.timestamp-a.timestamp);
+  const list=document.getElementById('historyList');
+  if(!myBids.length){list.innerHTML='<div class="empty-state">No match bids yet. Start predicting!</div>';return}
+  list.innerHTML=myBids.map(b=>{
+    const m=matches.find(x=>x.id===b.matchId)||{};
+    const pc=b.pointsChange||0;
+    const result=b.result||'pending';
+    return '<div class="history-item"><div><div class="match">'+(m.teamA||'?')+' vs '+(m.teamB||'?')+'</div><div class="detail">'+(b.team||'No bid')+' '+(b.points?b.points+'pts':'')+' | '+result+'</div></div><span class="point-chip '+(pc>0?'positive':pc<0?'negative':'neutral')+'">'+(pc>0?'+':'')+pc+'</span></div>';
+  }).join('');
+  const tossBids=getData('tossBids');
+  const myToss=tossBids.filter(b=>b.email===currentUser.email).sort((a,b)=>b.timestamp-a.timestamp);
+  const tossList=document.getElementById('tossHistoryList');
+  if(!myToss.length){tossList.innerHTML='<div class="empty-state">No toss predictions yet.</div>';return}
+  tossList.innerHTML=myToss.map(b=>{
+    const m=matches.find(x=>x.id===b.matchId)||{};
+    const pc=b.pointsChange||0;
+    return '<div class="history-item"><div><div class="match">'+(m.teamA||'?')+' vs '+(m.teamB||'?')+'</div><div class="detail">Toss: '+b.team+' won | '+(b.result||'pending')+'</div></div><span class="point-chip '+(pc>0?'positive':pc<0?'negative':'neutral')+'">'+(pc>0?'+':'')+pc+'</span></div>';
+  }).join('');
+  const bonuses=getBonusData();
+  const predictions=getData('iplWinnerPredictions');
+  const myPred=predictions.find(p=>p.email===currentUser.email);
+  const iplDiv=document.getElementById('iplHistoryItem');
+  if(!myPred){iplDiv.innerHTML='<div class="empty-state">No IPL winner prediction yet.</div>';return}
+  const correct=bonuses.iplWinnerCalculated&&myPred.team===bonuses.iplChampion;
+  iplDiv.innerHTML='<div class="history-item"><div><div class="match">IPL Champion Prediction</div><div class="detail">Your pick: '+myPred.team+(bonuses.iplWinnerCalculated?' | Champion: '+bonuses.iplChampion:'')+'</div></div><span class="point-chip '+(correct?'positive':'neutral')+'">'+(correct?'+100':'Pending')+'</span></div>';
+}
+
+function loadFirebaseFromStorage(){
+  const cfg=localStorage.getItem('ipl_firebase_config');
+  if(!cfg)return;
+  const c=JSON.parse(cfg);
+  if(!c.apiKey||!c.projectId)return;
+  try{
+    if(!firebase.apps.length){firebase.initializeApp(c)}
+    db=firebase.firestore();
+    document.getElementById('syncBadge').className='sync-status sync-on';
+    document.getElementById('syncBadge').textContent='Live';
+    fbUnsubs.forEach(u=>u());fbUnsubs=[];
+    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
+      const unsub=db.collection('ipl').doc(k).onSnapshot(doc=>{
+        if(doc.exists){
+          const data=doc.data();
+          if(data&&data.value!==undefined){
+            localStorage.setItem('ipl_'+k,JSON.stringify(data.value));
+            if(k==='users'||k==='matches'||k==='bids'){loadMatches();refreshAll();}
+          }
+        }
+      },err=>console.error(k,err));
+      fbUnsubs.push(unsub);
+    });
+  }catch(e){console.error('Firebase init failed',e)}
+}
+function syncToCloud(key,value){
+  if(!db)return;
+  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+}
+
+document.getElementById('loginEmail').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin()});
+</script>
+</body>
+</html>
