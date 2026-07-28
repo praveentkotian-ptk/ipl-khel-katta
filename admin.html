@@ -888,7 +888,7 @@ function disconnectFirebase(){
 
 function syncToCloud(key,value){
   if(!db)return;
-  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{}));
+  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
 }
 </script>
 </body>
