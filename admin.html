@@ -403,7 +403,6 @@ function renderPlayers(){
   if(!users.length){list.innerHTML='<div class="empty-state">No players registered yet.</div>';return}
   list.innerHTML=users.map((u,i)=>'<div class="player-row"><div style="flex:1"><div class="player-name">'+u.name+'</div><div class="player-email">'+u.email+'</div></div><div style="text-align:right"><div style="font-size:1rem;font-weight:700;color:var(--g)">'+u.totalPoints+'</div><div style="font-size:.7rem;color:var(--muted)">pts</div></div><button class="btn btn-danger btn-sm" onclick="removePlayer(\''+u.email+'\')">Remove</button></div>').join('');
   
-  // Populate adjust player dropdown
   const sel=document.getElementById('adjustPlayerSelect');
   sel.innerHTML='<option value="">-- Select --</option>'+users.map(u=>'<option value="'+u.email+'">'+u.name+' ('+u.email+')</option>').join('');
 }
@@ -792,7 +791,11 @@ function startNewSeasonConfirm(){
   showConfirm('This will delete ALL data permanently. Are you sure?',()=>{
     ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>localStorage.removeItem('ipl_'+k));
     setSeason({name:'IPL 2026',startDate:new Date().toISOString()});
-    if(db){['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>db.collection('ipl').doc(k).delete().catch(()=>{}))}
+    if(db){
+      ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
+        db.collection('ipl').doc(k).delete().catch(()=>{});
+      });
+    }
     showFeedback('New season started! All data cleared.','success');
     init();
   });
@@ -889,4 +892,4 @@ function syncToCloud(key,value){
 }
 </script>
 </body>
-</html>
+  </html>
