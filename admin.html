@@ -12,7 +12,7 @@
 body{background:var(--bg);color:var(--text);line-height:1.5}
 header{background:linear-gradient(135deg,var(--g),var(--g2));color:#fff;padding:1rem;text-align:center;box-shadow:var(--shadow)}
 header h1{font-size:1.4rem}header p{font-size:.8rem;opacity:.9}
-.container{max-width:800px;margin:0 auto;padding:1rem}
+.container{max-width:900px;margin:0 auto;padding:1rem}
 .card{background:var(--card);border-radius:12px;padding:1.2rem;margin-bottom:1rem;box-shadow:var(--shadow)}
 .card h2{font-size:1.1rem;color:var(--g);margin-bottom:.8rem;display:flex;align-items:center;gap:.4rem}
 .card h2::before{content:'';display:inline-block;width:4px;height:1.1rem;background:var(--o);border-radius:2px}
@@ -79,6 +79,7 @@ tr:hover{background:#f8f9fa}
 .sync-on{background:#e8f5e9;color:#2e7d32}.sync-off{background:#ffebee;color:#c62828}
 .sync-pending{background:#fff3e0;color:#e65100}
 .section-title{font-size:1rem;color:var(--g);font-weight:700;margin:1rem 0 .5rem;padding-bottom:.3rem;border-bottom:2px solid var(--border)}
+.action-bar{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.4rem}
 </style>
 </head>
 <body>
@@ -127,6 +128,16 @@ tr:hover{background:#f8f9fa}
       <div class="card">
         <h2>Registered Players (<span id="playerCount">0</span>)</h2>
         <div id="playerList"></div>
+      </div>
+      <div class="card">
+        <h2>Adjust Player Points</h2>
+        <div class="grid-3">
+          <div><label>Select Player</label><select id="adjustPlayerSelect"><option value="">-- Select --</option></select></div>
+          <div><label>Points (+/-)</label><input type="number" id="adjustPoints" placeholder="e.g. 50 or -25"></div>
+          <div><label>Reason</label><input id="adjustReason" placeholder="Bonus / Penalty reason"></div>
+        </div>
+        <button class="btn btn-primary" onclick="adjustPlayerPoints()">Apply Adjustment</button>
+        <div id="adjustLog" style="margin-top:.6rem;font-size:.85rem;color:var(--muted)"></div>
       </div>
     </div>
 
@@ -222,8 +233,10 @@ tr:hover{background:#f8f9fa}
         <div class="table-wrap"><table><thead><tr><th>Player</th><th>IPL Winner</th><th>Toss Ka Boss</th><th>Bonus Total</th></tr></thead><tbody id="bonusReportTable"></tbody></table></div>
       </div>
       <div class="card">
-        <h2>Export Data</h2>
+        <h2>Export / Import Data</h2>
         <button class="btn btn-secondary" onclick="exportJSON()">Export Full JSON</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()">Import JSON File</button>
+        <input type="file" id="importFile" class="hidden" accept=".json" onchange="importJSONFile(event)">
         <textarea class="export-area" id="exportArea" readonly placeholder="Click Export to generate JSON..."></textarea>
       </div>
     </div>
@@ -253,9 +266,9 @@ tr:hover{background:#f8f9fa}
           <li>Go to <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a></li>
           <li>Create a new project (or use existing)</li>
           <li>Enable Firestore Database (Start in test mode)</li>
-          <li>Go to Project Settings &gt; General &gt; Your apps &gt; Web</li>
+          <li>Go to Project Settings > General > Your apps > Web</li>
           <li>Copy the firebaseConfig object values into the fields above</li>
-          <li>Click <strong>Connect &amp; Sync</strong></li>
+          <li>Click <strong>Connect & Sync</strong></li>
         </ol>
         <p style="font-size:.8rem;color:var(--muted);margin-top:.6rem"><strong>Security:</strong> For production, set Firestore rules to allow read/write only to authenticated users.</p>
       </div>
@@ -388,13 +401,36 @@ function renderPlayers(){
   document.getElementById('playerCount').textContent=users.length;
   const list=document.getElementById('playerList');
   if(!users.length){list.innerHTML='<div class="empty-state">No players registered yet.</div>';return}
-  list.innerHTML=users.map((u,i)=>'<div class="player-row"><div style="flex:1"><div class="player-name">'+u.name+'</div><div class="player-email">'+u.email+'</div></div><div style="text-align:right"><div style="font-size:1rem;font-weight:700;color:var(--g)">'+u.totalPoints+'</div><div style="font-size:.7rem;color:var(--muted)">pts</div></div><button class="btn btn-danger btn-sm" onclick="removePlayer(\\''+u.email+'\\')">Remove</button></div>').join('');
+  list.innerHTML=users.map((u,i)=>'<div class="player-row"><div style="flex:1"><div class="player-name">'+u.name+'</div><div class="player-email">'+u.email+'</div></div><div style="text-align:right"><div style="font-size:1rem;font-weight:700;color:var(--g)">'+u.totalPoints+'</div><div style="font-size:.7rem;color:var(--muted)">pts</div></div><button class="btn btn-danger btn-sm" onclick="removePlayer(\''+u.email+'\')">Remove</button></div>').join('');
+  
+  // Populate adjust player dropdown
+  const sel=document.getElementById('adjustPlayerSelect');
+  sel.innerHTML='<option value="">-- Select --</option>'+users.map(u=>'<option value="'+u.email+'">'+u.name+' ('+u.email+')</option>').join('');
 }
 
 function removePlayer(email){
   const users=getData('users');
   const idx=users.findIndex(u=>u.email===email);
   if(idx>-1){users.splice(idx,1);setData('users',users);renderPlayers();showFeedback('Player removed','success')}
+}
+
+function adjustPlayerPoints(){
+  const email=document.getElementById('adjustPlayerSelect').value;
+  const points=parseInt(document.getElementById('adjustPoints').value,10);
+  const reason=document.getElementById('adjustReason').value.trim();
+  if(!email){showFeedback('Select a player','error');return}
+  if(isNaN(points)){showFeedback('Enter valid points','error');return}
+  const users=getData('users');
+  const u=users.find(x=>x.email===email);
+  if(!u){showFeedback('Player not found','error');return}
+  u.totalPoints+=points;
+  if(!u.adjustments)u.adjustments=[];
+  u.adjustments.push({points,reason,timestamp:Date.now()});
+  setData('users',users);
+  document.getElementById('adjustPoints').value='';
+  document.getElementById('adjustReason').value='';
+  renderPlayers();
+  showFeedback((points>0?'+':'')+points+' applied to '+u.name,'success');
 }
 
 function createMatch(){
@@ -427,8 +463,32 @@ function renderMatches(){
     const status=m.processed?'<span class="badge" style="background:#e8f5e9;color:#2e7d32">Processed</span>':'<span class="badge" style="background:#fff3e0;color:#e65100">Open</span>';
     const dayBadge=m.special==='friday'?'<span class="badge badge-friday">Friday</span>':m.special==='twister'?'<span class="badge badge-twister">Twister</span>':'<span class="badge badge-normal">Normal</span>';
     const tossBadge=m.isTossMatch?'<span class="badge" style="background:#e1f5fe;color:#0277bd">Toss</span>':'';
-    return '<div style="padding:.8rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.6rem"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:1.1rem">'+m.teamA+' vs '+m.teamB+'</div><div style="font-size:.8rem;color:var(--muted)">'+m.id+' | '+m.date+' '+dayBadge+' '+tossBadge+'</div></div><div>'+status+'</div></div>'+(m.winner?'<div style="margin-top:.4rem;font-size:.9rem"><strong>Winner:</strong> '+m.winner+'</div>':'')+(m.tossWinner?'<div style="margin-top:.2rem;font-size:.9rem"><strong>Toss:</strong> '+m.tossWinner+'</div>':'')+'</div>';
+    return '<div style="padding:.8rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.6rem"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:1.1rem">'+m.teamA+' vs '+m.teamB+'</div><div style="font-size:.8rem;color:var(--muted)">'+m.id+' | '+m.date+' '+dayBadge+' '+tossBadge+'</div></div><div>'+status+'</div></div>'+(m.winner?'<div style="margin-top:.4rem;font-size:.9rem"><strong>Winner:</strong> '+m.winner+'</div>':'')+(m.tossWinner?'<div style="margin-top:.2rem;font-size:.9rem"><strong>Toss:</strong> '+m.tossWinner+'</div>':'')+'<div class="action-bar"><button class="btn btn-sm btn-secondary" onclick="editMatch(\''+m.id+'\')">Edit</button>'+(m.processed?'':'<button class="btn btn-sm btn-danger" onclick="deleteMatch(\''+m.id+'\')">Delete</button>')+'</div></div>';
   }).join('');
+}
+
+function editMatch(id){
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===id);
+  if(!m)return;
+  document.getElementById('matchTeamA').value=m.teamA;
+  document.getElementById('matchTeamB').value=m.teamB;
+  document.getElementById('matchSpecial').value=m.special;
+  document.getElementById('matchDate').value=m.date;
+  document.getElementById('matchDeadline').value=m.deadline||'';
+  document.getElementById('isTossMatch').checked=!!m.isTossMatch;
+  document.getElementById('matchNumber').value=m.id+' (Editing)';
+  window.editingMatchId=id;
+  showFeedback('Editing '+m.id+'. Change fields and click Create Match to save.','info');
+}
+
+function deleteMatch(id){
+  showConfirm('Delete match '+id+'? This cannot be undone.',()=>{
+    const matches=getData('matches').filter(m=>m.id!==id);
+    setData('matches',matches);
+    renderMatches();
+    showFeedback('Match deleted','success');
+  });
 }
 
 function loadWinnerMatches(){
@@ -449,7 +509,7 @@ function loadWinnerMatch(){
   const points=m.special==='friday'?'20, 40, 60, 100':m.special==='twister'?'30, 50':'10, 20, 30, 50';
   document.getElementById('winnerMatchInfo').innerHTML='<div class="match-info"><div class="team">'+m.teamA+'</div><div class="vs">VS</div><div class="team">'+m.teamB+'</div></div><div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.6rem"><span class="badge badge-'+m.special+'">'+dayLabel+'</span><span class="badge" style="background:#e3f2fd;color:#1565c0">Bid Points: '+points+'</span>'+(m.isTossMatch?'<span class="badge" style="background:#e1f5fe;color:#0277bd">Toss Ka Boss</span>':'')+'</div>';
   const opts=document.getElementById('winnerOptions');
-  opts.innerHTML='<div class="winner-option" onclick="selectWinner(this,\\''+m.teamA+'\\')">'+m.teamA+'</div><div class="winner-option" onclick="selectWinner(this,\\''+m.teamB+'\\')">'+m.teamB+'</div>';
+  opts.innerHTML='<div class="winner-option" onclick="selectWinner(this,\''+m.teamA+'\')">'+m.teamA+'</div><div class="winner-option" onclick="selectWinner(this,\''+m.teamB+'\')">'+m.teamB+'</div>';
   document.getElementById('winnerSelection').classList.remove('hidden');
   document.getElementById('scorePreview').innerHTML='';
   window.selectedWinner=null;
@@ -479,4 +539,354 @@ function previewScores(){
     else{lossCount++;lossPts+=Math.round(bid.points*-1.3)}
   });
   const container=document.getElementById('scorePreview');
-  container.innerHTML='<h4>Score Preview</h4><div class="score-row"><span>Win bids ('+winCount+')</span><span class="point-chip positive\">+'+winPts+'</span></div><div class="score-row"><span>Loss bids ('+lossCount+')</span><span class="point-chip negative\">'+lossPts+'</span></div><div class="score-row"><span>No bids ('+noBidCount+')</span><span class="point-chip negative\">'+noBidPts+'</span></div><div class="score-row"><span>Net Change</span><span class="point-chip '+(winPts+lossPts+noBidPts
+  container.innerHTML='<h4>Score Preview</h4><div class="score-row"><span>Win bids ('+winCount+')</span><span class="point-chip positive">+'+winPts+'</span></div><div class="score-row"><span>Loss bids ('+lossCount+')</span><span class="point-chip negative">'+lossPts+'</span></div><div class="score-row"><span>No bids ('+noBidCount+')</span><span class="point-chip negative">'+noBidPts+'</span></div><div class="score-row"><span>Net Change</span><span class="point-chip '+(winPts+lossPts+noBidPts>=0?'positive':'negative')+'">'+(winPts+lossPts+noBidPts)+'</span></div>';
+}
+
+function calculateWinner(){
+  const matchId=document.getElementById('winnerMatchSelect').value;
+  const winner=window.selectedWinner;
+  if(!matchId||!winner){showFeedback('Select a match and winner','error');return}
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===matchId);
+  if(!m||m.processed){showFeedback('Match already processed or not found','error');return}
+  const users=getData('users');
+  const bids=getData('bids');
+  const matchBids=bids.filter(b=>b.matchId===matchId);
+  let processed=0;
+  users.forEach(u=>{
+    const bid=matchBids.find(b=>b.email===u.email);
+    if(!bid){
+      u.totalPoints-=25;
+      const bidx=bids.findIndex(b=>b.matchId===matchId&&b.email===u.email);
+      if(bidx===-1){bids.push({matchId,email:u.email,team:null,points:0,timestamp:Date.now(),processed:true,result:'no-bid',pointsChange:-25})}
+    }else if(bid.team===winner){
+      const gain=bid.points;
+      u.totalPoints+=gain;
+      u.wins+=1;
+      bid.processed=true;
+      bid.result='win';
+      bid.pointsChange=gain;
+      processed++;
+    }else{
+      const loss=Math.round(bid.points*-1.3);
+      u.totalPoints+=loss;
+      bid.processed=true;
+      bid.result='loss';
+      bid.pointsChange=loss;
+      processed++;
+    }
+  });
+  m.winner=winner;
+  m.processed=true;
+  const mIdx=matches.findIndex(x=>x.id===matchId);
+  matches[mIdx]=m;
+  setData('users',users);
+  setData('bids',bids);
+  setData('matches',matches);
+  showFeedback('Winner declared! '+winner+' wins. '+processed+' correct bids.','success');
+  loadWinnerMatches();
+}
+
+function loadBonusTab(){
+  const bonuses=getBonusData();
+  document.getElementById('iplChampionTeam').value=bonuses.iplChampion||'';
+  const status=document.getElementById('iplWinnerStatus');
+  if(bonuses.iplWinnerCalculated){status.innerHTML='<span class="point-chip positive">IPL Winner results calculated</span>'}
+  else if(bonuses.iplChampion){status.innerHTML='<span class="point-chip neutral">Champion set: '+bonuses.iplChampion+' (not yet calculated)</span>'}
+  else{status.innerHTML='<span class="point-chip neutral">No champion set yet</span>'}
+  const matches=getData('matches');
+  const tossMatches=matches.filter(m=>m.isTossMatch&&!m.tossProcessed);
+  const sel=document.getElementById('tossMatchSelect');
+  sel.innerHTML='<option value="">-- Select a Wed match --</option>'+tossMatches.map(m=>'<option value="'+m.id+'">'+m.id+': '+m.teamA+' vs '+m.teamB+' ('+m.date+')</option>').join('');
+  document.getElementById('tossMatchInfo').innerHTML='';
+  document.getElementById('tossSelection').classList.add('hidden');
+}
+
+function saveIplChampion(){
+  const team=document.getElementById('iplChampionTeam').value.trim().toUpperCase();
+  if(!team){showFeedback('Enter champion team name','error');return}
+  const bonuses=getBonusData();
+  bonuses.iplChampion=team;
+  setBonusData(bonuses);
+  showFeedback('Champion team saved!','success');
+  loadBonusTab();
+}
+
+function calculateIplWinner(){
+  const bonuses=getBonusData();
+  if(!bonuses.iplChampion){showFeedback('Set champion team first','error');return}
+  if(bonuses.iplWinnerCalculated){showFeedback('Already calculated','error');return}
+  const users=getData('users');
+  const predictions=getData('iplWinnerPredictions');
+  let correct=0;
+  users.forEach(u=>{
+    const pred=predictions.find(p=>p.email===u.email);
+    if(pred&&pred.team===bonuses.iplChampion){u.totalPoints+=100;correct++}
+  });
+  bonuses.iplWinnerCalculated=true;
+  setData('users',users);
+  setBonusData(bonuses);
+  showFeedback('IPL Winner calculated! '+correct+' correct predictions (+100 each)','success');
+  loadBonusTab();
+}
+
+function loadTossMatch(){
+  const id=document.getElementById('tossMatchSelect').value;
+  if(!id){document.getElementById('tossMatchInfo').innerHTML='';document.getElementById('tossSelection').classList.add('hidden');return}
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===id);
+  if(!m)return;
+  document.getElementById('tossMatchInfo').innerHTML='<div class="match-info"><div class="team">'+m.teamA+'</div><div class="vs">VS</div><div class="team">'+m.teamB+'</div></div><div style="font-size:.85rem;color:var(--muted);text-align:center">Wednesday Toss Ka Boss Match</div>';
+  const opts=document.getElementById('tossOptions');
+  opts.innerHTML='<div class="winner-option" onclick="selectTossWinner(this,\''+m.teamA+'\')">'+m.teamA+' won toss</div><div class="winner-option" onclick="selectTossWinner(this,\''+m.teamB+'\')">'+m.teamB+' won toss</div>';
+  document.getElementById('tossSelection').classList.remove('hidden');
+  document.getElementById('tossScorePreview').innerHTML='';
+  window.selectedTossWinner=null;
+}
+
+function selectTossWinner(el,team){
+  document.querySelectorAll('#tossOptions .winner-option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  window.selectedTossWinner=team;
+  const id=document.getElementById('tossMatchSelect').value;
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===id);
+  const tossBids=getData('tossBids').filter(b=>b.matchId===id);
+  let correct=0,wrong=0;
+  tossBids.forEach(b=>{if(b.team===team)correct++;else wrong++});
+  document.getElementById('tossScorePreview').innerHTML='<h4>Toss Preview</h4><div class="score-row"><span>Correct toss ('+correct+')</span><span class="point-chip positive">+'+(correct*30)+'</span></div><div class="score-row"><span>Wrong toss ('+wrong+')</span><span class="point-chip negative">'+(wrong*-39)+'</span></div><div class="score-row"><span>Net Change</span><span class="point-chip '+(correct*30+wrong*-39>=0?'positive':'negative')+'">'+(correct*30+wrong*-39)+'</span></div>';
+}
+
+function calculateTossBoss(){
+  const matchId=document.getElementById('tossMatchSelect').value;
+  const winner=window.selectedTossWinner;
+  if(!matchId||!winner){showFeedback('Select match and toss winner','error');return}
+  const matches=getData('matches');
+  const m=matches.find(x=>x.id===matchId);
+  if(!m||m.tossProcessed){showFeedback('Toss already processed','error');return}
+  const users=getData('users');
+  const tossBids=getData('tossBids');
+  const matchTossBids=tossBids.filter(b=>b.matchId===matchId);
+  let correct=0;
+  users.forEach(u=>{
+    const bid=matchTossBids.find(b=>b.email===u.email);
+    if(bid){
+      if(bid.team===winner){u.totalPoints+=30;bid.result='win';bid.pointsChange=30;correct++}
+      else{u.totalPoints-=39;bid.result='loss';bid.pointsChange=-39}
+    }
+  });
+  m.tossWinner=winner;
+  m.tossProcessed=true;
+  const mIdx=matches.findIndex(x=>x.id===matchId);
+  matches[mIdx]=m;
+  setData('users',users);
+  setData('tossBids',tossBids);
+  setData('matches',matches);
+  showFeedback('Toss Ka Boss done! '+winner+' won. '+correct+' correct.','success');
+  loadBonusTab();
+}
+
+function loadReports(){
+  const users=getData('users');
+  const matches=getData('matches');
+  const bids=getData('bids');
+  const bonuses=getBonusData();
+  const predictions=getData('iplWinnerPredictions');
+  const tossBids=getData('tossBids');
+  const sorted=[...users].sort((a,b)=>b.totalPoints-a.totalPoints||b.wins-a.wins);
+  document.getElementById('rankingTable').innerHTML=sorted.map((u,i)=>'<tr><td>'+(i+1)+'</td><td>'+u.name+'</td><td style="font-weight:700;color:'+(u.totalPoints>=0?'var(--g)':'var(--o)')+'">'+u.totalPoints+'</td><td>'+u.wins+'</td></tr>').join('');
+  const allBids=bids.filter(b=>b.team);
+  document.getElementById('allBidsTable').innerHTML=allBids.map(b=>{
+    const m=matches.find(x=>x.id===b.matchId)||{};
+    const u=users.find(x=>x.email===b.email)||{};
+    const pts=b.pointsChange||0;
+    return '<tr><td>'+(m.id||b.matchId)+'</td><td>'+(u.name||b.email)+'</td><td>'+(b.team||'-')+'</td><td>'+(b.points||0)+'</td><td><span class="badge" style="background:'+(b.result==='win'?'#e8f5e9;color:#2e7d32':b.result==='loss'?'#ffebee;color:#c62828':'#f5f5f5;color:#666')+'">'+(b.result||'pending')+'</span></td><td class="point-chip '+(pts>0?'positive':pts<0?'negative':'neutral')+'">'+(pts>0?'+':'')+pts+'</td></tr>';
+  }).join('');
+  const penalties=bids.filter(b=>b.result==='no-bid');
+  document.getElementById('penaltyTable').innerHTML=penalties.map(b=>{
+    const m=matches.find(x=>x.id===b.matchId)||{};
+    const u=users.find(x=>x.email===b.email)||{};
+    return '<tr><td>'+(m.id||b.matchId)+'</td><td>'+(u.name||b.email)+'</td><td class="point-chip negative">-25</td></tr>';
+  }).join('');
+  if(!allBids.length)document.getElementById('allBidsTable').innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted)">No bids yet</td></tr>';
+  if(!penalties.length)document.getElementById('penaltyTable').innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted)">No penalties yet</td></tr>';
+  document.getElementById('bonusReportTable').innerHTML=users.map(u=>{
+    const pred=predictions.find(p=>p.email===u.email);
+    const tossCorrect=tossBids.filter(b=>b.email===u.email&&b.result==='win').length;
+    const tossWrong=tossBids.filter(b=>b.email===u.email&&b.result==='loss').length;
+    const tossTotal=tossCorrect*30+tossWrong*-39;
+    const iplPts=(bonuses.iplWinnerCalculated&&pred&&pred.team===bonuses.iplChampion)?100:0;
+    return '<tr><td>'+u.name+'</td><td>'+(pred?pred.team+' ('+(iplPts>0?'+100':'0')+')':'-')+'</td><td>'+tossCorrect+'W/'+tossWrong+'L ('+(tossTotal>0?'+':'')+tossTotal+')</td><td style="font-weight:700">'+(iplPts+tossTotal>0?'+':'')+(iplPts+tossTotal)+'</td></tr>';
+  }).join('');
+}
+
+function loadWeekly(){
+  const startInput=document.getElementById('weekStart').value;
+  const tbody=document.getElementById('weeklyTable');
+  if(!startInput){tbody.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted)">Select a week start date</td></tr>';return}
+  const start=new Date(startInput);
+  const end=new Date(start);
+  end.setDate(end.getDate()+6);
+  end.setHours(23,59,59,999);
+  const users=getData('users');
+  const bids=getData('bids');
+  const matches=getData('matches');
+  const weekly={};
+  users.forEach(u=>weekly[u.email]={name:u.name,points:0});
+  bids.filter(b=>b.processed&&b.pointsChange).forEach(b=>{
+    const m=matches.find(x=>x.id===b.matchId);
+    if(m){
+      const md=new Date(m.date);
+      if(md>=start&&md<=end){
+        if(!weekly[b.email])weekly[b.email]={name:b.email,points:0};
+        weekly[b.email].points+=b.pointsChange;
+      }
+    }
+  });
+  const sorted=Object.values(weekly).sort((a,b)=>b.points-a.points);
+  if(!sorted.length){tbody.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted)">No data for selected week</td></tr>';return}
+  tbody.innerHTML=sorted.map((u,i)=>'<tr><td>'+(i+1)+'</td><td>'+u.name+'</td><td style="font-weight:700;color:'+(u.points>=0?'var(--g)':'var(--o)')+'">'+(u.points>0?'+':'')+u.points+'</td></tr>').join('');
+}
+
+function exportJSON(){
+  const data={season:getSeason(),users:getData('users'),matches:getData('matches'),bids:getData('bids'),bonuses:getBonusData(),iplWinnerPredictions:getData('iplWinnerPredictions'),tossBids:getData('tossBids'),exportedAt:new Date().toISOString()};
+  document.getElementById('exportArea').value=JSON.stringify(data,null,2);
+  showFeedback('JSON exported to textarea','success');
+}
+
+function importJSONFile(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const data=JSON.parse(e.target.result);
+      if(data.users)setData('users',data.users);
+      if(data.matches)setData('matches',data.matches);
+      if(data.bids)setData('bids',data.bids);
+      if(data.bonuses)setBonusData(data.bonuses);
+      if(data.iplWinnerPredictions)setData('iplWinnerPredictions',data.iplWinnerPredictions);
+      if(data.tossBids)setData('tossBids',data.tossBids);
+      if(data.season)setSeason(data.season);
+      showFeedback('Data imported successfully!','success');
+      renderPlayers();renderMatches();loadReports();loadSeasonStats();
+    }catch(err){
+      showFeedback('Invalid JSON file','error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+function loadSeasonStats(){
+  const users=getData('users');
+  const matches=getData('matches');
+  const bids=getData('bids');
+  document.getElementById('statPlayers').textContent=users.length;
+  document.getElementById('statMatches').textContent=matches.length;
+  document.getElementById('statBids').textContent=bids.filter(b=>b.team).length;
+  document.getElementById('statProcessed').textContent=matches.filter(m=>m.processed).length;
+}
+
+function startNewSeasonConfirm(){
+  showConfirm('This will delete ALL data permanently. Are you sure?',()=>{
+    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>localStorage.removeItem('ipl_'+k));
+    setSeason({name:'IPL 2026',startDate:new Date().toISOString()});
+    if(db){['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>db.collection('ipl').doc(k).delete().catch(()=>{}))}
+    showFeedback('New season started! All data cleared.','success');
+    init();
+  });
+}
+
+function showConfirm(msg,cb){
+  document.getElementById('confirmMsg').textContent=msg;
+  document.getElementById('confirmOverlay').classList.remove('hidden');
+  confirmCallback=cb;
+  document.getElementById('confirmBtn').onclick=()=>{
+    document.getElementById('confirmOverlay').classList.add('hidden');
+    if(confirmCallback)confirmCallback();
+  };
+}
+
+function cancelConfirm(){
+  document.getElementById('confirmOverlay').classList.add('hidden');
+  confirmCallback=null;
+}
+
+document.getElementById('adminPass').addEventListener('keypress',e=>{if(e.key==='Enter')checkAdmin()});
+
+function loadFirebaseFromStorage(){
+  const cfg=localStorage.getItem('ipl_firebase_config');
+  if(!cfg)return;
+  const c=JSON.parse(cfg);
+  document.getElementById('fbApiKey').value=c.apiKey||'';
+  document.getElementById('fbAuthDomain').value=c.authDomain||'';
+  document.getElementById('fbProjectId').value=c.projectId||'';
+  document.getElementById('fbAppId').value=c.appId||'';
+}
+
+function saveFirebaseConfig(){
+  const cfg={apiKey:document.getElementById('fbApiKey').value.trim(),authDomain:document.getElementById('fbAuthDomain').value.trim(),projectId:document.getElementById('fbProjectId').value.trim(),appId:document.getElementById('fbAppId').value.trim()};
+  localStorage.setItem('ipl_firebase_config',JSON.stringify(cfg));
+  showFeedback('Firebase config saved','success');
+}
+
+function loadSyncTab(){
+  const cfg=localStorage.getItem('ipl_firebase_config');
+  const status=document.getElementById('firebaseStatus');
+  if(!cfg){status.innerHTML='<span class="point-chip neutral">Not configured. Enter Firebase details below.</span>';return}
+  const c=JSON.parse(cfg);
+  status.innerHTML='<strong>Config saved:</strong> '+c.projectId+'<br>'+(db?'<span class="point-chip positive">Connected to Firestore</span>':'<span class="point-chip neutral">Click Connect to sync</span>');
+}
+
+function connectFirebase(){
+  const cfg=localStorage.getItem('ipl_firebase_config');
+  if(!cfg){showFeedback('Save Firebase config first','error');return}
+  const c=JSON.parse(cfg);
+  try{
+    if(!firebase.apps.length){firebase.initializeApp(c)}
+    db=firebase.firestore();
+    document.getElementById('syncBadge').className='sync-status sync-pending';
+    document.getElementById('syncBadge').textContent='Connecting...';
+    fbUnsubs.forEach(u=>u());fbUnsubs=[];
+    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
+      const unsub=db.collection('ipl').doc(k).onSnapshot(doc=>{
+        if(doc.exists){
+          const data=doc.data();
+          if(data&&data.value!==undefined){
+            localStorage.setItem('ipl_'+k,JSON.stringify(data.value));
+            if(k==='users')renderPlayers();
+            if(k==='matches')renderMatches();
+            if(k==='bids')loadReports();
+          }
+        }
+      },err=>console.error(k,err));
+      fbUnsubs.push(unsub);
+    });
+    document.getElementById('syncBadge').className='sync-status sync-on';
+    document.getElementById('syncBadge').textContent='Live';
+    document.getElementById('firebaseStatus').innerHTML='<span class="point-chip positive">Connected! Real-time sync active.</span>';
+    showFeedback('Firestore connected!','success');
+  }catch(e){
+    document.getElementById('syncBadge').className='sync-status sync-off';
+    document.getElementById('syncBadge').textContent='Offline';
+    showFeedback('Connection failed: '+e.message,'error');
+  }
+}
+
+function disconnectFirebase(){
+  fbUnsubs.forEach(u=>u());
+  fbUnsubs=[];
+  db=null;
+  document.getElementById('syncBadge').className='sync-status sync-off';
+  document.getElementById('syncBadge').textContent='Offline';
+  showFeedback('Disconnected from Firestore','info');
+}
+
+function syncToCloud(key,value){
+  if(!db)return;
+  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+}
+</script>
+</body>
+</html>
