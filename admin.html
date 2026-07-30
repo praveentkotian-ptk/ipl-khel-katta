@@ -117,7 +117,11 @@ tr:hover{background:#f8f9fb}
     <h2>Admin Panel</h2>
     <p>IPL Khel@Katta - Season Manager</p>
     <form id="loginForm">
-      <input type="password" id="adminPass" placeholder="Password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+      <div style="position:relative">
+        <input type="password" id="adminPass" placeholder="Password" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off" style="padding-right:3.2rem">
+        <button type="button" id="togglePass" style="position:absolute;right:.4rem;top:50%;transform:translateY(-50%);background:none;border:none;font-size:.75rem;font-weight:700;color:var(--pitch-green);cursor:pointer;padding:.3rem .5rem;margin:0">SHOW</button>
+      </div>
+      <div id="charCount" style="font-size:.7rem;color:var(--muted);text-align:right;margin-top:.2rem">0 characters</div>
       <button type="submit" class="btn btn-primary" id="enterBtn" style="width:100%;margin-top:.4rem">Enter</button>
     </form>
     <p id="loginHint" style="margin-top:.8rem;font-size:.72rem;color:var(--muted)"></p>
@@ -347,15 +351,21 @@ const ADMIN_PASS='katta2026';
 let confirmCallback=null,db=null,fbUnsubs=[];
 
 function checkAdmin(){
+  const hint=document.getElementById('loginHint');
   const p=document.getElementById('adminPass').value.trim();
+  hint.style.color='var(--muted)';
+  hint.textContent='Checking...';
   if(p===ADMIN_PASS){
+    hint.style.color='#2e7d32';
+    hint.textContent='Correct! Loading admin panel...';
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     init();
     showFeedback('Welcome, Admin!','success');
   }else{
     showFeedback('Incorrect password','error');
-    document.getElementById('loginHint').textContent='Password is case-sensitive. Check with whoever set up the contest if unsure.';
+    hint.style.color='#d32f2f';
+    hint.textContent='Incorrect ('+p.length+' characters entered — password should be 9 characters). Password is case-sensitive.';
   }
 }
 
@@ -956,6 +966,14 @@ function syncToCloud(key,value){
 
 /* ---------- Wire up all buttons (no inline onclick anywhere) ---------- */
 document.getElementById('loginForm').addEventListener('submit',function(e){ e.preventDefault(); checkAdmin(); });
+document.getElementById('togglePass').addEventListener('click',function(){
+  const inp=document.getElementById('adminPass');
+  if(inp.type==='password'){ inp.type='text'; this.textContent='HIDE'; }
+  else{ inp.type='password'; this.textContent='SHOW'; }
+});
+document.getElementById('adminPass').addEventListener('input',function(){
+  document.getElementById('charCount').textContent=this.value.length+' characters';
+});
 document.getElementById('addPlayerBtn').addEventListener('click',addPlayer);
 document.getElementById('bulkImportBtn').addEventListener('click',bulkImport);
 document.getElementById('adjustPointsBtn').addEventListener('click',adjustPlayerPoints);
