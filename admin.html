@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IPL Khel@Katta - Admin Panel</title>
+<link rel="manifest" href="admin-manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#0b1f3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IPL Admin">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -348,6 +355,14 @@ window.addEventListener('error', function(e){
 });
 
 const ADMIN_PASS='katta2026';
+const IPL_FIREBASE_CONFIG={
+  apiKey:"AIzaSyBVb_BWd6BPi3aX2GR5AKYBc1OwWwRIWS4",
+  authDomain:"ipl-khel-katta.firebaseapp.com",
+  projectId:"ipl-khel-katta",
+  storageBucket:"ipl-khel-katta.firebasestorage.app",
+  messagingSenderId:"1075392168572",
+  appId:"1:1075392168572:web:9ce1576775a56c2a833ff9"
+};
 let confirmCallback=null,db=null,fbUnsubs=[];
 
 function checkAdmin(){
@@ -407,7 +422,7 @@ function init(){
   renderPlayers();
   loadSeasonStats();
   loadFirebaseFromStorage();
-  if(db)connectFirebase();
+  connectFirebase();
 }
 
 function addPlayer(){
@@ -892,9 +907,8 @@ function cancelConfirm(){
 
 function loadFirebaseFromStorage(){
   const cfg=localStorage.getItem('ipl_firebase_config');
-  if(!cfg)return;
   let c;
-  try{ c=JSON.parse(cfg); }catch(e){ return; }
+  try{ c=cfg?JSON.parse(cfg):IPL_FIREBASE_CONFIG; }catch(e){ c=IPL_FIREBASE_CONFIG; }
   document.getElementById('fbApiKey').value=c.apiKey||'';
   document.getElementById('fbAuthDomain').value=c.authDomain||'';
   document.getElementById('fbProjectId').value=c.projectId||'';
@@ -910,15 +924,15 @@ function saveFirebaseConfig(){
 function loadSyncTab(){
   const cfg=localStorage.getItem('ipl_firebase_config');
   const status=document.getElementById('firebaseStatus');
-  if(!cfg){status.innerHTML='<span class="point-chip neutral">Not configured. Enter Firebase details below.</span>';return}
-  const c=JSON.parse(cfg);
-  status.innerHTML='<strong>Config saved:</strong> '+c.projectId+'<br>'+(db?'<span class="point-chip positive">Connected to Firestore</span>':'<span class="point-chip neutral">Click Connect to sync</span>');
+  let c;
+  try{ c=cfg?JSON.parse(cfg):IPL_FIREBASE_CONFIG; }catch(e){ c=IPL_FIREBASE_CONFIG; }
+  status.innerHTML='<strong>Project:</strong> '+c.projectId+'<br>'+(db?'<span class="point-chip positive">Connected to Firestore</span>':'<span class="point-chip neutral">Click Connect to sync</span>');
 }
 
 function connectFirebase(){
   const cfg=localStorage.getItem('ipl_firebase_config');
-  if(!cfg){showFeedback('Save Firebase config first','error');return}
-  const c=JSON.parse(cfg);
+  let c;
+  try{ c=cfg?JSON.parse(cfg):IPL_FIREBASE_CONFIG; }catch(e){ c=IPL_FIREBASE_CONFIG; }
   try{
     if(!firebase.apps.length){firebase.initializeApp(c)}
     db=firebase.firestore();
@@ -990,6 +1004,12 @@ document.getElementById('connectFbBtn').addEventListener('click',connectFirebase
 document.getElementById('disconnectFbBtn').addEventListener('click',disconnectFirebase);
 document.getElementById('newSeasonBtn').addEventListener('click',startNewSeasonConfirm);
 document.getElementById('confirmCancelBtn').addEventListener('click',cancelConfirm);
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
