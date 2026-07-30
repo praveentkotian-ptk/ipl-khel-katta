@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IPL Khel@Katta</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#0b1f3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IPL Khel">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -202,6 +209,14 @@ window.addEventListener('error', function(e){
 
 let currentUser=null,db=null,fbUnsubs=[];
 const IPL_TEAMS=['CSK','MI','RCB','KKR','SRH','DC','PBKS','RR','GT','LSG'];
+const IPL_FIREBASE_CONFIG={
+  apiKey:"AIzaSyBVb_BWd6BPi3aX2GR5AKYBc1OwWwRIWS4",
+  authDomain:"ipl-khel-katta.firebaseapp.com",
+  projectId:"ipl-khel-katta",
+  storageBucket:"ipl-khel-katta.firebasestorage.app",
+  messagingSenderId:"1075392168572",
+  appId:"1:1075392168572:web:9ce1576775a56c2a833ff9"
+};
 
 function showFeedback(msg,type){
   const el=document.createElement('div');
@@ -482,9 +497,8 @@ function loadHistory(){
 
 function loadFirebaseFromStorage(){
   const cfg=localStorage.getItem('ipl_firebase_config');
-  if(!cfg)return;
   let c;
-  try{ c=JSON.parse(cfg); }catch(e){ return; }
+  try{ c=cfg?JSON.parse(cfg):IPL_FIREBASE_CONFIG; }catch(e){ c=IPL_FIREBASE_CONFIG; }
   if(!c.apiKey||!c.projectId)return;
   try{
     if(!firebase.apps.length){firebase.initializeApp(c)}
@@ -515,6 +529,12 @@ function syncToCloud(key,value){
 document.getElementById('loginForm').addEventListener('submit',function(e){ e.preventDefault(); doLogin(); });
 document.getElementById('logoutBtn').addEventListener('click',doLogout);
 document.getElementById('refreshBtn').addEventListener('click',refreshAll);
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
