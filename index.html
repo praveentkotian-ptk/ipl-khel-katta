@@ -238,12 +238,14 @@ function keyFor(k,item){
   return null;
 }
 function getData(k){
-  if(k==='users') return usersCache;
-  if(k==='matches') return matchesCache;
-  if(k==='bids') return bidsCache;
-  if(k==='tossBids') return tossBidsCache;
-  if(k==='iplWinnerPredictions') return predictionsCache;
-  return [];
+  let arr;
+  if(k==='users') arr=usersCache;
+  else if(k==='matches') arr=matchesCache;
+  else if(k==='bids') arr=bidsCache;
+  else if(k==='tossBids') arr=tossBidsCache;
+  else if(k==='iplWinnerPredictions') arr=predictionsCache;
+  else arr=[];
+  return JSON.parse(JSON.stringify(arr));
 }
 function setLocalCache(k,v){
   if(k==='users') usersCache=v;
