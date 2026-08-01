@@ -139,6 +139,7 @@ tr:hover{background:#f8f9fb}
   <header>
     <h1>🏏 IPL Khel@Katta</h1>
     <p>Admin Panel - Season Manager <span id="syncBadge" class="sync-status sync-off">Offline</span></p>
+    <button class="btn btn-sm btn-secondary" id="adminLogoutBtn" style="margin-top:.5rem">Logout</button>
   </header>
   <div class="seam"></div>
   <div class="container">
@@ -160,14 +161,13 @@ tr:hover{background:#f8f9fb}
           <div><label>Full Name</label><input id="newPlayerName" placeholder="e.g. Rahul Sharma"></div>
           <div><label>Email</label><input id="newPlayerEmail" type="email" placeholder="rahul@email.com"></div>
         </div>
-        <label>Initial Password</label>
-        <input id="newPlayerPassword" placeholder="Set a password for this player">
+        <p style="font-size:.78rem;color:var(--muted);margin-top:.5rem">Player sets their own password the first time they log in.</p>
         <button class="btn btn-primary" id="addPlayerBtn">Add Player</button>
       </div>
       <div class="card">
         <h2>Bulk Import (CSV)</h2>
-        <label>Paste CSV: Name,Email,Password (one per line)</label>
-        <textarea id="bulkCsv" rows="5" placeholder="Rahul Sharma,rahul@email.com,rahul123&#10;Vikram Patel,vikram@email.com,vikram123"></textarea>
+        <label>Paste CSV: Name,Email (one per line)</label>
+        <textarea id="bulkCsv" rows="5" placeholder="Rahul Sharma,rahul@email.com&#10;Vikram Patel,vikram@email.com"></textarea>
         <button class="btn btn-primary" id="bulkImportBtn">Import</button>
       </div>
       <div class="card">
@@ -184,12 +184,10 @@ tr:hover{background:#f8f9fb}
         <button class="btn btn-primary" id="adjustPointsBtn">Apply Adjustment</button>
       </div>
       <div class="card">
-        <h2>Reset Player Password</h2>
-        <div class="grid-2">
-          <div><label>Select Player</label><select id="resetPwPlayerSelect"><option value="">-- Select --</option></select></div>
-          <div><label>New Password</label><input id="resetPwNewPassword" placeholder="new password"></div>
-        </div>
-        <button class="btn btn-primary" id="resetPwBtn">Reset Password</button>
+        <h2>Clear Player Password</h2>
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:.6rem">If a player forgets their password, clear it here — they'll be prompted to set a brand new one on their next login.</p>
+        <div><label>Select Player</label><select id="resetPwPlayerSelect"><option value="">-- Select --</option></select></div>
+        <button class="btn btn-danger" id="resetPwBtn">Clear Password</button>
       </div>
     </div>
 
@@ -389,6 +387,7 @@ function checkAdmin(){
   if(p===ADMIN_PASS){
     hint.style.color='#2e7d32';
     hint.textContent='Correct! Loading admin panel...';
+    sessionStorage.setItem('ipl_admin_session','1');
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     init();
@@ -398,6 +397,14 @@ function checkAdmin(){
     hint.style.color='#d32f2f';
     hint.textContent='Incorrect ('+p.length+' characters entered — password should be 9 characters). Password is case-sensitive.';
   }
+}
+function adminLogout(){
+  sessionStorage.removeItem('ipl_admin_session');
+  fbUnsubs.forEach(u=>u());fbUnsubs=[];
+  db=null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('adminPass').value='';
 }
 
 function showFeedback(msg,type){
@@ -498,18 +505,15 @@ function init(){
 function addPlayer(){
   const name=document.getElementById('newPlayerName').value.trim();
   const email=document.getElementById('newPlayerEmail').value.trim().toLowerCase();
-  const password=document.getElementById('newPlayerPassword').value.trim();
   if(!name||!email){showFeedback('Name and Email required','error');return}
-  if(!password){showFeedback('Set an initial password for the player','error');return}
   const users=getData('users');
   if(users.find(u=>u.email===email)){showFeedback('Email already registered','error');return}
-  users.push({name,email,password,totalPoints:0,wins:0,created:Date.now()});
+  users.push({name,email,password:'',totalPoints:0,wins:0,created:Date.now()});
   setData('users',users);
   document.getElementById('newPlayerName').value='';
   document.getElementById('newPlayerEmail').value='';
-  document.getElementById('newPlayerPassword').value='';
   renderPlayers();
-  showFeedback('Player added!','success');
+  showFeedback('Player added! They\'ll set their own password on first login.','success');
 }
 
 function bulkImport(){
@@ -520,12 +524,11 @@ function bulkImport(){
   const users=getData('users');
   lines.forEach(line=>{
     const parts=line.split(',');
-    if(parts.length>=3){
+    if(parts.length>=2){
       const name=parts[0].trim();
       const email=parts[1].trim().toLowerCase();
-      const password=parts[2].trim();
-      if(name&&email&&password){
-        if(!users.find(u=>u.email===email)){users.push({name,email,password,totalPoints:0,wins:0,created:Date.now()});added++}
+      if(name&&email){
+        if(!users.find(u=>u.email===email)){users.push({name,email,password:'',totalPoints:0,wins:0,created:Date.now()});added++}
         else{skipped++}
       }
     }
@@ -538,17 +541,14 @@ function bulkImport(){
 
 function resetPlayerPassword(){
   const email=document.getElementById('resetPwPlayerSelect').value;
-  const newPw=document.getElementById('resetPwNewPassword').value.trim();
   if(!email){showFeedback('Select a player','error');return}
-  if(!newPw){showFeedback('Enter a new password','error');return}
   const users=getData('users');
   const u=users.find(x=>x.email===email);
   if(!u){showFeedback('Player not found','error');return}
-  u.password=newPw;
+  u.password='';
   setData('users',users);
-  document.getElementById('resetPwNewPassword').value='';
   renderPlayers();
-  showFeedback('Password reset for '+u.name,'success');
+  showFeedback('Password cleared for '+u.name+' — they can set a new one at their next login','success');
 }
 
 function renderPlayers(){
@@ -1146,6 +1146,13 @@ document.getElementById('connectFbBtn').addEventListener('click',connectFirebase
 document.getElementById('disconnectFbBtn').addEventListener('click',disconnectFirebase);
 document.getElementById('newSeasonBtn').addEventListener('click',startNewSeasonConfirm);
 document.getElementById('confirmCancelBtn').addEventListener('click',cancelConfirm);
+document.getElementById('adminLogoutBtn').addEventListener('click',adminLogout);
+
+if(sessionStorage.getItem('ipl_admin_session')==='1'){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  init();
+}
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
