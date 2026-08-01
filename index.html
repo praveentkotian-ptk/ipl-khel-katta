@@ -128,7 +128,7 @@ tr:hover{background:#f8f9fb}
     <form id="loginForm">
       <input id="loginName" placeholder="Your Name" autocorrect="off" autocomplete="name">
       <input id="loginEmail" type="email" placeholder="your@email.com" autocapitalize="off" autocorrect="off" autocomplete="email">
-      <input id="loginPassword" type="password" placeholder="Password" autocapitalize="off" autocorrect="off" autocomplete="current-password">
+      <input id="loginPassword" type="password" placeholder="Password (first login: choose one)" autocapitalize="off" autocorrect="off" autocomplete="current-password">
       <button type="submit" class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:.4rem">Login</button>
     </form>
     <p id="loginHint" style="margin-top:.6rem;font-size:.72rem;color:var(--muted)"></p>
@@ -296,15 +296,32 @@ function doLogin(){
   const user=users.find(u=>u.email===email&&u.name.toLowerCase()===name.toLowerCase());
   if(!user){showFeedback('Not registered. Contact admin.','error');hint.textContent='';return}
   if(!user.password){
-    showFeedback('No password set for this account — ask admin to set one','error');
-    hint.style.color='#d32f2f';
-    hint.textContent='Ask admin to set a password for your account in the Players tab.';
+    if(password.length<4){
+      hint.style.color='#e65100';
+      hint.textContent='First time logging in — choose a password (at least 4 characters) and tap Login again to set it.';
+      return;
+    }
+    user.password=password;
+    const allUsers=getData('users');
+    const idx=allUsers.findIndex(u=>u.email===user.email);
+    allUsers[idx]=user;
+    setData('users',allUsers);
+    showFeedback('Password created — welcome!','success');
+    hint.textContent='';
+    currentUser=user;
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('welcomeUser').textContent=user.name;
+    document.getElementById('userPoints').textContent=user.totalPoints+' pts';
+    loadIplWinnerCard();
+    loadMatches();
+    refreshAll();
     return;
   }
   if(user.password!==password){
     showFeedback('Incorrect password','error');
     hint.style.color='#d32f2f';
-    hint.textContent='Incorrect password. Ask admin to reset it if you forgot.';
+    hint.textContent='Incorrect password. Ask admin to clear it if you forgot.';
     return;
   }
   hint.textContent='';
