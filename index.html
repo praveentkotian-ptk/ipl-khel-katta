@@ -128,9 +128,11 @@ tr:hover{background:#f8f9fb}
     <form id="loginForm">
       <input id="loginName" placeholder="Your Name" autocorrect="off" autocomplete="name">
       <input id="loginEmail" type="email" placeholder="your@email.com" autocapitalize="off" autocorrect="off" autocomplete="email">
+      <input id="loginPassword" type="password" placeholder="Password" autocapitalize="off" autocorrect="off" autocomplete="current-password">
       <button type="submit" class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:.4rem">Login</button>
     </form>
-    <p style="margin-top:1rem;font-size:.75rem;color:var(--muted)">Not registered? Contact admin to be added.</p>
+    <p id="loginHint" style="margin-top:.6rem;font-size:.72rem;color:var(--muted)"></p>
+    <p style="margin-top:.4rem;font-size:.75rem;color:var(--muted)">Not registered, or forgot your password? Contact admin.</p>
   </div>
 </div>
 
@@ -226,30 +228,91 @@ function showFeedback(msg,type){
   setTimeout(()=>el.remove(),4000);
 }
 
+const COLLECTION_MAP={users:'users',matches:'matches',bids:'bids',tossBids:'tossBids',iplWinnerPredictions:'predictions'};
+let usersCache=[],matchesCache=[],bidsCache=[],tossBidsCache=[],predictionsCache=[],seasonCache={},bonusesCache={};
+
+function keyFor(k,item){
+  if(k==='users'||k==='iplWinnerPredictions') return item.email;
+  if(k==='matches') return item.id;
+  if(k==='bids'||k==='tossBids') return item.matchId+'_'+item.email;
+  return null;
+}
 function getData(k){
-  try{return JSON.parse(localStorage.getItem('ipl_'+k)||'[]')}catch(e){return[]}
+  if(k==='users') return usersCache;
+  if(k==='matches') return matchesCache;
+  if(k==='bids') return bidsCache;
+  if(k==='tossBids') return tossBidsCache;
+  if(k==='iplWinnerPredictions') return predictionsCache;
+  return [];
+}
+function setLocalCache(k,v){
+  if(k==='users') usersCache=v;
+  else if(k==='matches') matchesCache=v;
+  else if(k==='bids') bidsCache=v;
+  else if(k==='tossBids') tossBidsCache=v;
+  else if(k==='iplWinnerPredictions') predictionsCache=v;
 }
 function setData(k,v){
-  localStorage.setItem('ipl_'+k,JSON.stringify(v));
-  syncToCloud(k,v);
+  const prev=getData(k);
+  const prevMap={};
+  prev.forEach(function(item){ prevMap[keyFor(k,item)]=item; });
+  setLocalCache(k,v);
+  if(!db) return;
+  const coll=COLLECTION_MAP[k];
+  if(!coll) return;
+  const newKeys=new Set(v.map(function(item){ return keyFor(k,item); }));
+  const batch=db.batch();
+  let opCount=0;
+  v.forEach(function(item){
+    const id=keyFor(k,item);
+    const prevItem=prevMap[id];
+    if(!prevItem||JSON.stringify(prevItem)!==JSON.stringify(item)){
+      batch.set(db.collection(coll).doc(id),item);
+      opCount++;
+    }
+  });
+  Object.keys(prevMap).forEach(function(id){
+    if(!newKeys.has(id)){ batch.delete(db.collection(coll).doc(id)); opCount++; }
+  });
+  if(opCount>0){
+    batch.commit().catch(function(e){ console.error('Firestore write failed',e); showFeedback('Sync failed: '+e.message,'error'); });
+  }
 }
-function getBonusData(){
-  try{return JSON.parse(localStorage.getItem('ipl_bonuses')||'{}')}catch(e){return{}}
-}
+function getBonusData(){ return bonusesCache||{}; }
 
 function doLogin(){
   const name=document.getElementById('loginName').value.trim();
   const email=document.getElementById('loginEmail').value.trim().toLowerCase();
-  if(!name||!email){showFeedback('Name and Email required','error');return}
+  const password=document.getElementById('loginPassword').value.trim();
+  const hint=document.getElementById('loginHint');
+  hint.style.color='var(--muted)';
+  if(!name||!email||!password){showFeedback('Name, email and password are required','error');hint.textContent='';return}
   const users=getData('users');
+  if(!users.length&&db){
+    hint.style.color='#e65100';
+    hint.textContent='Still loading player data — wait a second and tap Login again.';
+    return;
+  }
   const user=users.find(u=>u.email===email&&u.name.toLowerCase()===name.toLowerCase());
-  if(!user){showFeedback('Not registered. Contact admin.','error');return}
+  if(!user){showFeedback('Not registered. Contact admin.','error');hint.textContent='';return}
+  if(!user.password){
+    showFeedback('No password set for this account — ask admin to set one','error');
+    hint.style.color='#d32f2f';
+    hint.textContent='Ask admin to set a password for your account in the Players tab.';
+    return;
+  }
+  if(user.password!==password){
+    showFeedback('Incorrect password','error');
+    hint.style.color='#d32f2f';
+    hint.textContent='Incorrect password. Ask admin to reset it if you forgot.';
+    return;
+  }
+  hint.textContent='';
   currentUser=user;
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('welcomeUser').textContent=user.name;
   document.getElementById('userPoints').textContent=user.totalPoints+' pts';
-  loadFirebaseFromStorage();
   loadIplWinnerCard();
   loadMatches();
   refreshAll();
@@ -495,7 +558,7 @@ function loadHistory(){
   iplDiv.innerHTML='<div class="history-item"><div><div class="match">IPL Champion Prediction</div><div class="detail">Your pick: '+myPred.team+(bonuses.iplWinnerCalculated?' | Champion: '+bonuses.iplChampion:'')+'</div></div><span class="point-chip '+(correct?'positive':'neutral')+'">'+(correct?'+100':'Pending')+'</span></div>';
 }
 
-function loadFirebaseFromStorage(){
+function connectFirebase(){
   const cfg=localStorage.getItem('ipl_firebase_config');
   let c;
   try{ c=cfg?JSON.parse(cfg):IPL_FIREBASE_CONFIG; }catch(e){ c=IPL_FIREBASE_CONFIG; }
@@ -503,32 +566,48 @@ function loadFirebaseFromStorage(){
   try{
     if(!firebase.apps.length){firebase.initializeApp(c)}
     db=firebase.firestore();
+    document.getElementById('syncBadge').className='sync-status sync-pending';
+    document.getElementById('syncBadge').textContent='Connecting...';
+    fbUnsubs.forEach(u=>u());fbUnsubs=[];
+
+    function sub(collName,applyFn,onChange){
+      const unsub=db.collection(collName).onSnapshot(function(snapshot){
+        applyFn(snapshot.docs.map(function(d){ return d.data(); }));
+        if(onChange&&currentUser) onChange();
+      },function(err){ console.error(collName,err); });
+      fbUnsubs.push(unsub);
+    }
+    sub('users',function(arr){usersCache=arr;},function(){
+      const me=usersCache.find(u=>u.email===currentUser.email);
+      if(me){currentUser=me;document.getElementById('userPoints').textContent=me.totalPoints+' pts';}
+      refreshAll();
+    });
+    sub('matches',function(arr){matchesCache=arr;},function(){ loadMatches(); refreshAll(); });
+    sub('bids',function(arr){bidsCache=arr;},function(){ loadMatches(); refreshAll(); });
+    sub('tossBids',function(arr){tossBidsCache=arr;},function(){ loadMatches(); refreshAll(); });
+    sub('predictions',function(arr){predictionsCache=arr;},function(){ loadIplWinnerCard(); refreshAll(); });
+
+    const bonusUnsub=db.collection('meta').doc('bonuses').onSnapshot(function(doc){
+      bonusesCache=doc.exists?doc.data():{};
+      if(currentUser){ loadIplWinnerCard(); refreshAll(); }
+    });
+    fbUnsubs.push(bonusUnsub);
+
     document.getElementById('syncBadge').className='sync-status sync-on';
     document.getElementById('syncBadge').textContent='Live';
-    fbUnsubs.forEach(u=>u());fbUnsubs=[];
-    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
-      const unsub=db.collection('ipl').doc(k).onSnapshot(doc=>{
-        if(doc.exists){
-          const data=doc.data();
-          if(data&&data.value!==undefined){
-            localStorage.setItem('ipl_'+k,JSON.stringify(data.value));
-            if(k==='users'||k==='matches'||k==='bids'){loadMatches();refreshAll();}
-          }
-        }
-      },err=>console.error(k,err));
-      fbUnsubs.push(unsub);
-    });
-  }catch(e){console.error('Firebase init failed',e)}
-}
-function syncToCloud(key,value){
-  if(!db)return;
-  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+  }catch(e){
+    console.error('Firebase init failed',e);
+    document.getElementById('syncBadge').className='sync-status sync-off';
+    document.getElementById('syncBadge').textContent='Offline';
+  }
 }
 
 /* ---------- Wire up static buttons (no inline onclick anywhere) ---------- */
 document.getElementById('loginForm').addEventListener('submit',function(e){ e.preventDefault(); doLogin(); });
 document.getElementById('logoutBtn').addEventListener('click',doLogout);
 document.getElementById('refreshBtn').addEventListener('click',refreshAll);
+
+connectFirebase();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
