@@ -210,6 +210,8 @@ window.addEventListener('error', function(e){
 });
 
 let currentUser=null,db=null,fbUnsubs=[];
+let syncFlags={users:false,matches:false,bids:false,tossBids:false,predictions:false,bonuses:false};
+function allSynced(){ return Object.keys(syncFlags).every(function(k){ return syncFlags[k]; }); }
 const IPL_TEAMS=['CSK','MI','RCB','KKR','SRH','DC','PBKS','RR','GT','LSG'];
 const IPL_FIREBASE_CONFIG={
   apiKey:"AIzaSyBVb_BWd6BPi3aX2GR5AKYBc1OwWwRIWS4",
@@ -289,6 +291,11 @@ function doLogin(){
   const hint=document.getElementById('loginHint');
   hint.style.color='var(--muted)';
   if(!name||!email||!password){showFeedback('Name, email and password are required','error');hint.textContent='';return}
+  if(db&&!allSynced()){
+    hint.style.color='#e65100';
+    hint.textContent='Still loading your data — wait a second and tap Login again.';
+    return;
+  }
   const users=getData('users');
   if(!users.length&&db){
     hint.style.color='#e65100';
@@ -411,6 +418,9 @@ function loadMatches(){
     if(m.isTossMatch) html+='<span class="badge badge-bonus">Toss Ka Boss</span>';
     html+='</div><span class="badge badge-open">Open</span></div>';
     html+='<div class="match-teams"><div class="team">'+m.teamA+'</div><div class="vs">VS</div><div class="team">'+m.teamB+'</div></div>';
+    if(m.special==='twister'&&m.twisterComment){
+      html+='<div style="background:#fce4ec;border-left:3px solid #c2185b;padding:.5rem .7rem;border-radius:0 6px 6px 0;margin-bottom:.6rem;font-size:.82rem;color:#880e4f"><strong>Twister details:</strong> '+m.twisterComment+'</div>';
+    }
     if(myBid&&myBid.team){
       html+='<div style="background:#e8f5e9;padding:.6rem;border-radius:8px;text-align:center"><strong>Your bid:</strong> '+myBid.team+' - '+myBid.points+' pts</div>';
     }else{
@@ -596,18 +606,19 @@ function connectFirebase(){
       },function(err){ console.error(collName,err); });
       fbUnsubs.push(unsub);
     }
-    sub('users',function(arr){usersCache=arr;},function(){
+    sub('users',function(arr){usersCache=arr;syncFlags.users=true;},function(){
       const me=usersCache.find(u=>u.email===currentUser.email);
       if(me){currentUser=me;document.getElementById('userPoints').textContent=me.totalPoints+' pts';}
       refreshAll();
     });
-    sub('matches',function(arr){matchesCache=arr;},function(){ loadMatches(); refreshAll(); });
-    sub('bids',function(arr){bidsCache=arr;},function(){ loadMatches(); refreshAll(); });
-    sub('tossBids',function(arr){tossBidsCache=arr;},function(){ loadMatches(); refreshAll(); });
-    sub('predictions',function(arr){predictionsCache=arr;},function(){ loadIplWinnerCard(); refreshAll(); });
+    sub('matches',function(arr){matchesCache=arr;syncFlags.matches=true;},function(){ loadMatches(); refreshAll(); });
+    sub('bids',function(arr){bidsCache=arr;syncFlags.bids=true;},function(){ loadMatches(); refreshAll(); });
+    sub('tossBids',function(arr){tossBidsCache=arr;syncFlags.tossBids=true;},function(){ loadMatches(); refreshAll(); });
+    sub('predictions',function(arr){predictionsCache=arr;syncFlags.predictions=true;},function(){ loadIplWinnerCard(); refreshAll(); });
 
     const bonusUnsub=db.collection('meta').doc('bonuses').onSnapshot(function(doc){
       bonusesCache=doc.exists?doc.data():{};
+      syncFlags.bonuses=true;
       if(currentUser){ loadIplWinnerCard(); refreshAll(); }
     });
     fbUnsubs.push(bonusUnsub);
