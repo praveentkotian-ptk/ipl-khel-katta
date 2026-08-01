@@ -204,6 +204,10 @@ tr:hover{background:#f8f9fb}
           </div>
           <div><label>Match Date</label><input type="date" id="matchDate"></div>
         </div>
+        <div id="twisterCommentWrap" class="hidden">
+          <label>Twister Details</label>
+          <textarea id="twisterComment" rows="3" placeholder="e.g. Special twist rules for this match..."></textarea>
+        </div>
         <div class="grid-2">
           <div><label>Deadline (optional)</label><input type="datetime-local" id="matchDeadline"></div>
           <div><label>Match Number (auto)</label><input id="matchNumber" placeholder="Auto" readonly style="background:#f8f9fb"></div>
@@ -604,19 +608,20 @@ function createMatch(){
   const dateVal=document.getElementById('matchDate').value;
   const deadlineVal=document.getElementById('matchDeadline').value;
   const isToss=document.getElementById('isTossMatch').checked;
+  const twisterComment=document.getElementById('twisterComment').value.trim();
   if(!teamA||!teamB){showFeedback('Both teams required','error');return}
   const matches=getData('matches');
   if(editingMatchId){
     const m=matches.find(x=>x.id===editingMatchId);
     if(m){
-      m.teamA=teamA;m.teamB=teamB;m.special=special;m.date=dateVal||m.date;m.deadline=deadlineVal||null;m.isTossMatch=isToss;
+      m.teamA=teamA;m.teamB=teamB;m.special=special;m.date=dateVal||m.date;m.deadline=deadlineVal||null;m.isTossMatch=isToss;m.twisterComment=special==='twister'?twisterComment:'';
       setData('matches',matches);
       showFeedback('Match '+m.id+' updated','success');
     }
     editingMatchId=null;
   }else{
     const id='M'+(matches.length+1).toString().padStart(3,'0');
-    matches.push({id,teamA,teamB,special,date:dateVal||new Date().toISOString().split('T')[0],deadline:deadlineVal||null,winner:null,processed:false,isTossMatch:isToss,tossWinner:null,tossProcessed:false,created:Date.now()});
+    matches.push({id,teamA,teamB,special,date:dateVal||new Date().toISOString().split('T')[0],deadline:deadlineVal||null,winner:null,processed:false,isTossMatch:isToss,tossWinner:null,tossProcessed:false,twisterComment:special==='twister'?twisterComment:'',created:Date.now()});
     setData('matches',matches);
     showFeedback('Match created!','success');
   }
@@ -626,6 +631,8 @@ function createMatch(){
   document.getElementById('matchDeadline').value='';
   document.getElementById('matchNumber').value='';
   document.getElementById('isTossMatch').checked=false;
+  document.getElementById('twisterComment').value='';
+  document.getElementById('twisterCommentWrap').classList.add('hidden');
   renderMatches();
 }
 
@@ -658,6 +665,8 @@ function editMatch(id){
   document.getElementById('matchDeadline').value=m.deadline||'';
   document.getElementById('isTossMatch').checked=!!m.isTossMatch;
   document.getElementById('matchNumber').value=m.id+' (Editing)';
+  document.getElementById('twisterComment').value=m.twisterComment||'';
+  document.getElementById('twisterCommentWrap').classList.toggle('hidden',m.special!=='twister');
   editingMatchId=id;
   showFeedback('Editing '+m.id+'. Change fields and click Create Match to save.','info');
 }
@@ -1136,6 +1145,9 @@ document.getElementById('resetPwBtn').addEventListener('click',resetPlayerPasswo
 document.getElementById('migrateLegacyBtn').addEventListener('click',migrateLegacyData);
 document.getElementById('adjustPointsBtn').addEventListener('click',adjustPlayerPoints);
 document.getElementById('createMatchBtn').addEventListener('click',createMatch);
+document.getElementById('matchSpecial').addEventListener('change',function(){
+  document.getElementById('twisterCommentWrap').classList.toggle('hidden',this.value!=='twister');
+});
 document.getElementById('calcWinnerBtn').addEventListener('click',calculateWinner);
 document.getElementById('saveChampionBtn').addEventListener('click',saveIplChampion);
 document.getElementById('calcIplWinnerBtn').addEventListener('click',calculateIplWinner);
