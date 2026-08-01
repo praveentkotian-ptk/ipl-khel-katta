@@ -160,12 +160,14 @@ tr:hover{background:#f8f9fb}
           <div><label>Full Name</label><input id="newPlayerName" placeholder="e.g. Rahul Sharma"></div>
           <div><label>Email</label><input id="newPlayerEmail" type="email" placeholder="rahul@email.com"></div>
         </div>
+        <label>Initial Password</label>
+        <input id="newPlayerPassword" placeholder="Set a password for this player">
         <button class="btn btn-primary" id="addPlayerBtn">Add Player</button>
       </div>
       <div class="card">
         <h2>Bulk Import (CSV)</h2>
-        <label>Paste CSV: Name,Email (one per line)</label>
-        <textarea id="bulkCsv" rows="5" placeholder="Rahul Sharma,rahul@email.com&#10;Vikram Patel,vikram@email.com"></textarea>
+        <label>Paste CSV: Name,Email,Password (one per line)</label>
+        <textarea id="bulkCsv" rows="5" placeholder="Rahul Sharma,rahul@email.com,rahul123&#10;Vikram Patel,vikram@email.com,vikram123"></textarea>
         <button class="btn btn-primary" id="bulkImportBtn">Import</button>
       </div>
       <div class="card">
@@ -180,6 +182,14 @@ tr:hover{background:#f8f9fb}
           <div><label>Reason</label><input id="adjustReason" placeholder="Bonus / Penalty reason"></div>
         </div>
         <button class="btn btn-primary" id="adjustPointsBtn">Apply Adjustment</button>
+      </div>
+      <div class="card">
+        <h2>Reset Player Password</h2>
+        <div class="grid-2">
+          <div><label>Select Player</label><select id="resetPwPlayerSelect"><option value="">-- Select --</option></select></div>
+          <div><label>New Password</label><input id="resetPwNewPassword" placeholder="new password"></div>
+        </div>
+        <button class="btn btn-primary" id="resetPwBtn">Reset Password</button>
       </div>
     </div>
 
@@ -326,6 +336,12 @@ tr:hover{background:#f8f9fb}
           <div class="stat-box"><div class="num" id="statProcessed">0</div><div class="lbl">Processed</div></div>
         </div>
       </div>
+      <div class="card">
+        <h2>Migrate Legacy Data (one-time)</h2>
+        <p style="color:var(--muted);font-size:.85rem;margin-bottom:.6rem">If you had players/matches saved under the old storage format, tap this once to move them into the new structure. Safe to run more than once.</p>
+        <button class="btn btn-secondary" id="migrateLegacyBtn">Migrate Legacy Data</button>
+        <div id="migrateStatus" style="margin-top:.6rem;font-size:.85rem;color:var(--muted)"></div>
+      </div>
       <div class="card" style="border:2px solid var(--flood-orange)">
         <h2>Danger Zone</h2>
         <p style="color:var(--muted);font-size:.9rem;margin-bottom:.8rem">This will permanently delete all players, matches, bids, and results. This action cannot be undone.</p>
@@ -392,12 +408,68 @@ function showFeedback(msg,type){
   setTimeout(()=>el.remove(),4000);
 }
 
-function getData(k){try{return JSON.parse(localStorage.getItem('ipl_'+k)||'[]')}catch(e){return[]}}
-function setData(k,v){localStorage.setItem('ipl_'+k,JSON.stringify(v));syncToCloud(k,v);}
-function getSeason(){try{return JSON.parse(localStorage.getItem('ipl_season')||'{}')}catch(e){return{name:'IPL 2026'}}}
-function setSeason(v){localStorage.setItem('ipl_season',JSON.stringify(v));syncToCloud('season',v);}
-function getBonusData(){try{return JSON.parse(localStorage.getItem('ipl_bonuses')||'{}')}catch(e){return{}}}
-function setBonusData(v){localStorage.setItem('ipl_bonuses',JSON.stringify(v));syncToCloud('bonuses',v);}
+const COLLECTION_MAP={users:'users',matches:'matches',bids:'bids',tossBids:'tossBids',iplWinnerPredictions:'predictions'};
+let usersCache=[],matchesCache=[],bidsCache=[],tossBidsCache=[],predictionsCache=[],seasonCache={},bonusesCache={};
+
+function keyFor(k,item){
+  if(k==='users'||k==='iplWinnerPredictions') return item.email;
+  if(k==='matches') return item.id;
+  if(k==='bids'||k==='tossBids') return item.matchId+'_'+item.email;
+  return null;
+}
+function getData(k){
+  if(k==='users') return usersCache;
+  if(k==='matches') return matchesCache;
+  if(k==='bids') return bidsCache;
+  if(k==='tossBids') return tossBidsCache;
+  if(k==='iplWinnerPredictions') return predictionsCache;
+  return [];
+}
+function setLocalCache(k,v){
+  if(k==='users') usersCache=v;
+  else if(k==='matches') matchesCache=v;
+  else if(k==='bids') bidsCache=v;
+  else if(k==='tossBids') tossBidsCache=v;
+  else if(k==='iplWinnerPredictions') predictionsCache=v;
+}
+function setData(k,v){
+  const prev=getData(k);
+  const prevMap={};
+  prev.forEach(function(item){ prevMap[keyFor(k,item)]=item; });
+  setLocalCache(k,v);
+  if(!db) return;
+  const coll=COLLECTION_MAP[k];
+  if(!coll) return;
+  const newKeys=new Set(v.map(function(item){ return keyFor(k,item); }));
+  const batch=db.batch();
+  let opCount=0;
+  v.forEach(function(item){
+    const id=keyFor(k,item);
+    const prevItem=prevMap[id];
+    if(!prevItem||JSON.stringify(prevItem)!==JSON.stringify(item)){
+      batch.set(db.collection(coll).doc(id),item);
+      opCount++;
+    }
+  });
+  Object.keys(prevMap).forEach(function(id){
+    if(!newKeys.has(id)){ batch.delete(db.collection(coll).doc(id)); opCount++; }
+  });
+  if(opCount>0){
+    batch.commit().catch(function(e){ console.error('Firestore write failed',e); showFeedback('Sync failed: '+e.message,'error'); });
+  }
+}
+function getSeason(){ return (seasonCache&&seasonCache.name)?seasonCache:{name:'IPL 2026'}; }
+function setSeason(v){
+  seasonCache=v;
+  if(!db) return;
+  db.collection('meta').doc('season').set(v).catch(function(e){console.error(e);});
+}
+function getBonusData(){ return bonusesCache||{}; }
+function setBonusData(v){
+  bonusesCache=v;
+  if(!db) return;
+  db.collection('meta').doc('bonuses').set(v).catch(function(e){console.error(e);});
+}
 
 function switchTab(t,btnEl){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -417,8 +489,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 function init(){
-  const season=getSeason();
-  if(!season.name){setSeason({name:'IPL 2026',startDate:new Date().toISOString()})}
   renderPlayers();
   loadSeasonStats();
   loadFirebaseFromStorage();
@@ -428,13 +498,16 @@ function init(){
 function addPlayer(){
   const name=document.getElementById('newPlayerName').value.trim();
   const email=document.getElementById('newPlayerEmail').value.trim().toLowerCase();
+  const password=document.getElementById('newPlayerPassword').value.trim();
   if(!name||!email){showFeedback('Name and Email required','error');return}
+  if(!password){showFeedback('Set an initial password for the player','error');return}
   const users=getData('users');
   if(users.find(u=>u.email===email)){showFeedback('Email already registered','error');return}
-  users.push({name,email,totalPoints:0,wins:0,created:Date.now()});
+  users.push({name,email,password,totalPoints:0,wins:0,created:Date.now()});
   setData('users',users);
   document.getElementById('newPlayerName').value='';
   document.getElementById('newPlayerEmail').value='';
+  document.getElementById('newPlayerPassword').value='';
   renderPlayers();
   showFeedback('Player added!','success');
 }
@@ -447,11 +520,12 @@ function bulkImport(){
   const users=getData('users');
   lines.forEach(line=>{
     const parts=line.split(',');
-    if(parts.length>=2){
+    if(parts.length>=3){
       const name=parts[0].trim();
       const email=parts[1].trim().toLowerCase();
-      if(name&&email){
-        if(!users.find(u=>u.email===email)){users.push({name,email,totalPoints:0,wins:0,created:Date.now()});added++}
+      const password=parts[2].trim();
+      if(name&&email&&password){
+        if(!users.find(u=>u.email===email)){users.push({name,email,password,totalPoints:0,wins:0,created:Date.now()});added++}
         else{skipped++}
       }
     }
@@ -462,16 +536,33 @@ function bulkImport(){
   showFeedback('Added '+added+', skipped '+skipped+' duplicates','success');
 }
 
+function resetPlayerPassword(){
+  const email=document.getElementById('resetPwPlayerSelect').value;
+  const newPw=document.getElementById('resetPwNewPassword').value.trim();
+  if(!email){showFeedback('Select a player','error');return}
+  if(!newPw){showFeedback('Enter a new password','error');return}
+  const users=getData('users');
+  const u=users.find(x=>x.email===email);
+  if(!u){showFeedback('Player not found','error');return}
+  u.password=newPw;
+  setData('users',users);
+  document.getElementById('resetPwNewPassword').value='';
+  renderPlayers();
+  showFeedback('Password reset for '+u.name,'success');
+}
+
 function renderPlayers(){
   const users=getData('users');
   document.getElementById('playerCount').textContent=users.length;
   const list=document.getElementById('playerList');
   if(!users.length){list.innerHTML='<div class="empty-state">No players registered yet.</div>';}
   else{
-    list.innerHTML=users.map(u=>'<div class="player-row"><div style="flex:1"><div class="player-name">'+u.name+'</div><div class="player-email">'+u.email+'</div></div><div style="text-align:right"><div style="font-size:1rem;font-weight:700;color:var(--pitch-green)">'+u.totalPoints+'</div><div style="font-size:.7rem;color:var(--muted)">pts</div></div><button class="btn btn-danger btn-sm" data-role="remove-player" data-email="'+u.email+'">Remove</button></div>').join('');
+    list.innerHTML=users.map(u=>'<div class="player-row"><div style="flex:1"><div class="player-name">'+u.name+(u.password?'':' <span class="point-chip negative" style="font-size:.65rem">no password</span>')+'</div><div class="player-email">'+u.email+'</div></div><div style="text-align:right"><div style="font-size:1rem;font-weight:700;color:var(--pitch-green)">'+u.totalPoints+'</div><div style="font-size:.7rem;color:var(--muted)">pts</div></div><button class="btn btn-danger btn-sm" data-role="remove-player" data-email="'+u.email+'">Remove</button></div>').join('');
   }
   const sel=document.getElementById('adjustPlayerSelect');
   sel.innerHTML='<option value="">-- Select --</option>'+users.map(u=>'<option value="'+u.email+'">'+u.name+' ('+u.email+')</option>').join('');
+  const pwSel=document.getElementById('resetPwPlayerSelect');
+  pwSel.innerHTML='<option value="">-- Select --</option>'+users.map(u=>'<option value="'+u.email+'">'+u.name+' ('+u.email+')</option>').join('');
 }
 document.getElementById('playerList').addEventListener('click',function(e){
   const btn=e.target.closest('[data-role="remove-player"]');
@@ -877,16 +968,33 @@ function loadSeasonStats(){
   document.getElementById('statProcessed').textContent=matches.filter(m=>m.processed).length;
 }
 
+function deleteAllInCollection(collName){
+  return db.collection(collName).get().then(function(snapshot){
+    const docs=snapshot.docs;
+    const chunks=[];
+    for(let i=0;i<docs.length;i+=450){ chunks.push(docs.slice(i,i+450)); }
+    return chunks.reduce(function(chain,chunk){
+      return chain.then(function(){
+        const batch=db.batch();
+        chunk.forEach(function(d){ batch.delete(d.ref); });
+        return batch.commit();
+      });
+    }, Promise.resolve());
+  });
+}
+
 function startNewSeasonConfirm(){
   showConfirm('This will delete ALL data permanently. Are you sure?',()=>{
-    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>localStorage.removeItem('ipl_'+k));
+    usersCache=[];matchesCache=[];bidsCache=[];tossBidsCache=[];predictionsCache=[];
     setSeason({name:'IPL 2026',startDate:new Date().toISOString()});
+    setBonusData({});
     if(db){
-      ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
-        db.collection('ipl').doc(k).delete().catch(()=>{});
-      });
+      Promise.all(['users','matches','bids','tossBids','predictions'].map(deleteAllInCollection))
+        .then(function(){ showFeedback('New season started! All data cleared.','success'); })
+        .catch(function(e){ console.error(e); showFeedback('Some data may not have cleared: '+e.message,'error'); });
+    }else{
+      showFeedback('New season started (local only — connect Firestore to clear cloud data too)','success');
     }
-    showFeedback('New season started! All data cleared.','success');
     init();
   });
 }
@@ -939,20 +1047,31 @@ function connectFirebase(){
     document.getElementById('syncBadge').className='sync-status sync-pending';
     document.getElementById('syncBadge').textContent='Connecting...';
     fbUnsubs.forEach(u=>u());fbUnsubs=[];
-    ['users','matches','bids','season','bonuses','iplWinnerPredictions','tossBids'].forEach(k=>{
-      const unsub=db.collection('ipl').doc(k).onSnapshot(doc=>{
-        if(doc.exists){
-          const data=doc.data();
-          if(data&&data.value!==undefined){
-            localStorage.setItem('ipl_'+k,JSON.stringify(data.value));
-            if(k==='users')renderPlayers();
-            if(k==='matches')renderMatches();
-            if(k==='bids')loadReports();
-          }
-        }
-      },err=>console.error(k,err));
+
+    function sub(collName,applyFn,onChange){
+      const unsub=db.collection(collName).onSnapshot(function(snapshot){
+        applyFn(snapshot.docs.map(function(d){ return d.data(); }));
+        if(onChange) onChange();
+      },function(err){ console.error(collName,err); });
       fbUnsubs.push(unsub);
+    }
+    sub('users',function(arr){usersCache=arr;},function(){ renderPlayers(); loadReports(); loadSeasonStats(); });
+    sub('matches',function(arr){matchesCache=arr;},function(){ renderMatches(); loadWinnerMatches(); loadBonusTab(); loadSeasonStats(); });
+    sub('bids',function(arr){bidsCache=arr;},function(){ loadReports(); loadSeasonStats(); });
+    sub('tossBids',function(arr){tossBidsCache=arr;},function(){ loadReports(); });
+    sub('predictions',function(arr){predictionsCache=arr;},function(){ loadReports(); loadBonusTab(); });
+
+    const seasonUnsub=db.collection('meta').doc('season').onSnapshot(function(doc){
+      if(doc.exists){ seasonCache=doc.data(); }
+      else{ seasonCache={}; setSeason({name:'IPL 2026',startDate:new Date().toISOString()}); }
     });
+    fbUnsubs.push(seasonUnsub);
+    const bonusUnsub=db.collection('meta').doc('bonuses').onSnapshot(function(doc){
+      bonusesCache=doc.exists?doc.data():{};
+      loadBonusTab();
+    });
+    fbUnsubs.push(bonusUnsub);
+
     document.getElementById('syncBadge').className='sync-status sync-on';
     document.getElementById('syncBadge').textContent='Live';
     document.getElementById('firebaseStatus').innerHTML='<span class="point-chip positive">Connected! Real-time sync active.</span>';
@@ -973,9 +1092,30 @@ function disconnectFirebase(){
   showFeedback('Disconnected from Firestore','info');
 }
 
-function syncToCloud(key,value){
-  if(!db)return;
-  db.collection('ipl').doc(key).set({value:value,timestamp:firebase.firestore.FieldValue.serverTimestamp()}).catch(()=>{});
+function migrateLegacyData(){
+  if(!db){showFeedback('Connect to Firestore first','error');return}
+  const status=document.getElementById('migrateStatus');
+  status.textContent='Migrating...';
+  db.collection('ipl').get().then(function(snapshot){
+    const legacy={};
+    snapshot.forEach(function(doc){ legacy[doc.id]=doc.data()&&doc.data().value; });
+    let migrated=0;
+    const batch=db.batch();
+    (legacy.users||[]).forEach(function(u){ if(u&&u.email){ batch.set(db.collection('users').doc(u.email),u); migrated++; } });
+    (legacy.matches||[]).forEach(function(m){ if(m&&m.id){ batch.set(db.collection('matches').doc(m.id),m); migrated++; } });
+    (legacy.bids||[]).forEach(function(b){ if(b&&b.matchId&&b.email){ batch.set(db.collection('bids').doc(b.matchId+'_'+b.email),b); migrated++; } });
+    (legacy.tossBids||[]).forEach(function(b){ if(b&&b.matchId&&b.email){ batch.set(db.collection('tossBids').doc(b.matchId+'_'+b.email),b); migrated++; } });
+    (legacy.iplWinnerPredictions||[]).forEach(function(p){ if(p&&p.email){ batch.set(db.collection('predictions').doc(p.email),p); migrated++; } });
+    if(legacy.season){ batch.set(db.collection('meta').doc('season'),legacy.season); }
+    if(legacy.bonuses){ batch.set(db.collection('meta').doc('bonuses'),legacy.bonuses); }
+    return batch.commit().then(function(){
+      status.textContent='Migrated '+migrated+' records successfully.';
+      showFeedback('Legacy data migrated!','success');
+    });
+  }).catch(function(e){
+    status.textContent='Migration failed: '+e.message;
+    showFeedback('Migration failed: '+e.message,'error');
+  });
 }
 
 /* ---------- Wire up all buttons (no inline onclick anywhere) ---------- */
@@ -990,6 +1130,8 @@ document.getElementById('adminPass').addEventListener('input',function(){
 });
 document.getElementById('addPlayerBtn').addEventListener('click',addPlayer);
 document.getElementById('bulkImportBtn').addEventListener('click',bulkImport);
+document.getElementById('resetPwBtn').addEventListener('click',resetPlayerPassword);
+document.getElementById('migrateLegacyBtn').addEventListener('click',migrateLegacyData);
 document.getElementById('adjustPointsBtn').addEventListener('click',adjustPlayerPoints);
 document.getElementById('createMatchBtn').addEventListener('click',createMatch);
 document.getElementById('calcWinnerBtn').addEventListener('click',calculateWinner);
